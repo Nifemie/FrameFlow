@@ -50,11 +50,15 @@ class TimingEngine {
           endMs = voiceOverDurationMs;
         }
       } else if (parsedUserEnd != null) {
-        endMs = parsedUserEnd;
-        if (endMs <= currentStartMs) {
+        if (parsedUserEnd <= currentStartMs) {
           validationError = 'End time must be after start time (${TimeParser.formatDetailed(currentStartMs)})';
-        } else if (voiceOverDurationMs != null && voiceOverDurationMs > 0 && endMs > voiceOverDurationMs) {
+          // Fall back to keeping sequence forward-moving and monotonic
+          endMs = currentStartMs + (item.durationMs > 0 ? item.durationMs : defaultImageDurationMs);
+        } else if (voiceOverDurationMs != null && voiceOverDurationMs > 0 && parsedUserEnd > voiceOverDurationMs) {
           validationError = 'Timestamp exceeds audio duration (${TimeParser.formatStandard(voiceOverDurationMs)})';
+          endMs = parsedUserEnd;
+        } else {
+          endMs = parsedUserEnd;
         }
       } else {
         // No timestamp specified

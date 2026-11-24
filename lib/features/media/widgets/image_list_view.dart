@@ -24,6 +24,7 @@ class ImageListView extends ConsumerWidget {
 
     if (result != null) {
       final paths = result.paths.whereType<String>().toList();
+      paths.sort((a, b) => NaturalSort.compare(p.basename(a), p.basename(b)));
       _addPaths(ref, paths);
     }
   }

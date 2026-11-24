@@ -92,7 +92,7 @@ class ProjectNotifier extends StateNotifier<Project> {
     // Don't cut if playhead is exactly at startMs
     if (currentMs <= targetItem.startMs) return null;
 
-    final timeStr = (currentMs / 1000).toStringAsFixed(2);
+    final timeStr = TimeParser.formatDetailed(currentMs);
     updateTimestamp(targetItem.id, timeStr);
     return targetItem.displayName;
   }

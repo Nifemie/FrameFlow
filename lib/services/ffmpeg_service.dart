@@ -1,35 +1,60 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import '../core/utils/time_parser.dart';
 import '../features/export/models/export_config.dart';
 import '../models/project.dart';
 
 class FFmpegService {
+  static String? _cachedFFmpegPath;
   Process? _activeProcess;
   bool _isCancelled = false;
 
-  /// Finds the ffmpeg executable on the system or bundled directory.
+  /// Finds the ffmpeg executable across multiple environments.
   static Future<String?> findFFmpeg() async {
-    // 1. Check system PATH via 'where' on Windows
+    if (_cachedFFmpegPath != null && File(_cachedFFmpegPath!).existsSync()) {
+      return _cachedFFmpegPath;
+    }
+
+    // 1. Check system PATH via 'where.exe' on Windows
     try {
       final result = await Process.run('where.exe', ['ffmpeg']);
       if (result.exitCode == 0) {
         final path = (result.stdout as String).split(RegExp(r'[\r\n]+')).first.trim();
-        if (path.isNotEmpty && File(path).existsSync()) return path;
+        if (path.isNotEmpty && File(path).existsSync()) {
+          _cachedFFmpegPath = path;
+          return path;
+        }
       }
     } catch (_) {}
 
-    // 2. Check local project or common installation paths
+    // 2. Check local project, executable bundle, or common installation paths
+    final exeDir = p.dirname(Platform.resolvedExecutable);
+
     final candidatePaths = [
-      r'C:\Users\USER\Desktop\frameflow\assets\bin\ffmpeg.exe',
+      // Application / bundle directories
+      p.join(exeDir, 'ffmpeg.exe'),
+      p.join(exeDir, 'assets', 'bin', 'ffmpeg.exe'),
+      p.join(exeDir, 'data', 'flutter_assets', 'assets', 'bin', 'ffmpeg.exe'),
+      // Relative workspace directories
       'assets/bin/ffmpeg.exe',
       'windows/runner/ffmpeg.exe',
+      // Installed app directories
+      r'C:\Program Files (x86)\FrameFlow Studio\ffmpeg.exe',
+      r'C:\Program Files (x86)\FrameFlow Studio\assets\bin\ffmpeg.exe',
+      r'C:\Program Files\FrameFlow Studio\ffmpeg.exe',
+      // Common FFmpeg directories
       r'C:\Program Files\FFmpeg\bin\ffmpeg.exe',
       r'C:\ffmpeg\bin\ffmpeg.exe',
+      r'D:\ffmpeg\bin\ffmpeg.exe',
+      r'D:\frameflow\FrameFlow\assets\bin\ffmpeg.exe',
     ];
 
-    for (final p in candidatePaths) {
-      if (File(p).existsSync()) return p;
+    for (final candidate in candidatePaths) {
+      if (File(candidate).existsSync()) {
+        _cachedFFmpegPath = candidate;
+        return candidate;
+      }
     }
 
     return null;
@@ -51,7 +76,7 @@ class FFmpegService {
     _isCancelled = false;
     final ffmpegPath = await findFFmpeg();
     if (ffmpegPath == null) {
-      throw Exception('FFmpeg executable not found. Please install FFmpeg on your system.');
+      throw Exception('FFmpeg executable not found. Please install FFmpeg or place ffmpeg.exe in assets/bin/.');
     }
 
     if (project.images.isEmpty) {
@@ -63,28 +88,31 @@ class FFmpegService {
     final concatFile = File('${tempDir.path}\\concat.txt');
 
     try {
-      // 1. Generate FFmpeg concat script
+      // 1. Generate FFmpeg concat script with safe path quoting
       final buffer = StringBuffer();
       buffer.writeln('ffconcat version 1.0');
 
       for (int i = 0; i < project.images.length; i++) {
         final item = project.images[i];
         final durSec = (item.durationMs / 1000).toStringAsFixed(3);
-        // Concat format requires forward slashes or escaped backslashes
-        final safePath = item.filePath.replaceAll(r'\', '/');
+        // Concat format requires forward slashes and single-quote escaping (' -> '\'')
+        final safePath = item.filePath.replaceAll(r'\', '/').replaceAll("'", r"'\''");
         buffer.writeln("file '$safePath'");
         buffer.writeln('duration $durSec');
       }
 
       // Concat demuxer requirement: repeat the last file to set duration
-      final lastSafePath = project.images.last.filePath.replaceAll(r'\', '/');
+      final lastSafePath = project.images.last.filePath.replaceAll(r'\', '/').replaceAll("'", r"'\''");
       buffer.writeln("file '$lastSafePath'");
       await concatFile.writeAsString(buffer.toString());
 
-      // 2. Dimensions & Filter chain
-      final (width, height) = config.outputDimensions;
+      // 2. Dimensions (must be even numbers for x264/yuv420p) & Filter chain
+      final (rawWidth, rawHeight) = config.outputDimensions;
+      final width = (rawWidth ~/ 2) * 2;
+      final height = (rawHeight ~/ 2) * 2;
+
       final vf = 'scale=$width:$height:force_original_aspect_ratio=decrease,'
-          'pad=$width:$height:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p';
+          'pad=$width:$height:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p';
 
       final totalDurationSec = (project.totalDurationMs / 1000);
 
@@ -107,6 +135,7 @@ class FFmpegService {
         '-vf', vf,
         '-r', '${config.fps}',
         '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
         '-preset', 'medium',
         '-crf', '20',
         '-c:a', 'aac',

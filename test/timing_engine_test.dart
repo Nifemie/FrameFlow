@@ -172,5 +172,34 @@ void main() {
       expect(TimingEngine.findActiveImageIndex(images, 14000), equals(2));
       expect(TimingEngine.findActiveImageIndex(images, 20000), equals(2)); // Caps at last
     });
+
+    test('Preserves monotonic sequence when invalid/premature timestamp is entered', () {
+      final images = [
+        const ImageItem(id: '1', filePath: 'img1.jpg', displayName: 'Image 01', orderIndex: 0, userEndTimestampInput: '00:10'),
+        const ImageItem(id: '2', filePath: 'img2.jpg', displayName: 'Image 02', orderIndex: 1, userEndTimestampInput: '00:05'), // Invalid: 5s <= start of 10s
+        const ImageItem(id: '3', filePath: 'img3.jpg', displayName: 'Image 03', orderIndex: 2, userEndTimestampInput: '00:20'),
+      ];
+
+      final calculated = TimingEngine.calculateSequence(
+        images: images,
+        snapFinalImageToAudio: false,
+      );
+
+      // Image 01: 0 -> 10s
+      expect(calculated[0].startMs, equals(0));
+      expect(calculated[0].endMs, equals(10000));
+      expect(calculated[0].validationError, isNull);
+
+      // Image 02: starts at 10s; user entered 5s which is <= 10s.
+      // Must generate validation error and keep sequence forward-moving (10s -> 15s)
+      expect(calculated[1].startMs, equals(10000));
+      expect(calculated[1].endMs, equals(15000));
+      expect(calculated[1].validationError, contains('End time must be after start time'));
+
+      // Image 03: starts at 15s and ends at 20s
+      expect(calculated[2].startMs, equals(15000));
+      expect(calculated[2].endMs, equals(20000));
+      expect(calculated[2].durationMs, equals(5000));
+    });
   });
 }

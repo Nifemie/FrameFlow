@@ -106,11 +106,49 @@ class ProjectStorageService {
     return projectFromMap(map);
   }
 
+  /// Gets the File handle for the autosave cache.
+  static Future<File> getAutosaveFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/frameflow_autosave.json');
+  }
+
+  /// Checks if an autosave recovery file exists.
+  static Future<bool> hasAutosave() async {
+    try {
+      final file = await getAutosaveFile();
+      return file.existsSync() && (await file.length()) > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Loads the autosaved project, if present.
+  static Future<Project?> loadAutosave() async {
+    try {
+      final file = await getAutosaveFile();
+      if (!file.existsSync()) return null;
+      final jsonStr = await file.readAsString();
+      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+      return projectFromMap(map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Deletes the autosave cache file.
+  static Future<void> clearAutosave() async {
+    try {
+      final file = await getAutosaveFile();
+      if (file.existsSync()) {
+        await file.delete();
+      }
+    } catch (_) {}
+  }
+
   /// Saves autosave recovery state to app documents directory.
   static Future<void> saveAutosave(Project project) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/frameflow_autosave.json');
+      final file = await getAutosaveFile();
       final jsonStr = jsonEncode(projectToMap(project));
       await file.writeAsString(jsonStr);
     } catch (_) {}

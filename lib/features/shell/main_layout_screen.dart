@@ -60,6 +60,34 @@ class MainLayoutScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _openProject(BuildContext context, WidgetRef ref) async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Open FrameFlow Project',
+      type: FileType.custom,
+      allowedExtensions: ['frameflow', 'json'],
+    );
+
+    if (result != null && result.files.single.path != null) {
+      final loaded = await ProjectStorageService.loadProject(result.files.single.path!);
+      ref.read(projectProvider.notifier).loadProject(loaded);
+      ref.read(selectedImageIdProvider.notifier).state = null;
+      ref.read(playheadPositionProvider.notifier).state = 0;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Loaded project: ${loaded.name}')),
+        );
+      }
+    }
+  }
+
+  void _deleteSelectedImage(WidgetRef ref) {
+    final selectedId = ref.read(selectedImageIdProvider);
+    if (selectedId != null) {
+      ref.read(projectProvider.notifier).removeImage(selectedId);
+      ref.read(selectedImageIdProvider.notifier).state = null;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playback = ref.read(playbackControllerProvider);
@@ -81,8 +109,17 @@ class MainLayoutScreen extends ConsumerWidget {
         const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
           _quickSave(context, ref);
         },
+        const SingleActivator(LogicalKeyboardKey.keyO, control: true): () {
+          _openProject(context, ref);
+        },
         const SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
           ref.read(projectProvider.notifier).newProject();
+        },
+        const SingleActivator(LogicalKeyboardKey.delete): () {
+          _deleteSelectedImage(ref);
+        },
+        const SingleActivator(LogicalKeyboardKey.backspace): () {
+          _deleteSelectedImage(ref);
         },
       },
       child: const Focus(

@@ -28,7 +28,7 @@ class ExportProgressCard extends StatelessWidget {
 
   void _openFolder() {
     if (outputPath != null && File(outputPath!).existsSync()) {
-      Process.run('explorer.exe', ['/select,', outputPath!]);
+      Process.run('explorer.exe', ['/select,${outputPath!}']);
     }
   }
 
