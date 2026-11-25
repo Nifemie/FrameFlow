@@ -181,7 +181,6 @@ class MediaTrackStrip extends ConsumerWidget {
                         }
                       } else {
                         SelectionHelper.selectImage(ref, img.id);
-                        ref.read(playbackControllerProvider).seek(img.startMs);
                       }
                     },
                   ),
