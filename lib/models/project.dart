@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'audio_clip_item.dart';
 import 'image_item.dart';
 import 'text_overlay_item.dart';
+import 'timeline_marker.dart';
 import 'timeline_track_item.dart';
 import 'voice_over.dart';
 
@@ -43,6 +44,7 @@ class Project {
   final List<AudioClipItem> audioClips;
   final List<TextOverlayItem> textOverlays;
   final List<TimelineTrackItem> tracks;
+  final List<TimelineMarker> markers;
   final String? scriptText;
   final TimingMode timingMode;
   final VideoAspectRatio aspectRatio;
@@ -57,7 +59,7 @@ class Project {
     required this.id, required this.name,
     this.images = const [], this.voiceOver,
     this.audioClips = const [], this.textOverlays = const [],
-    this.tracks = const [],
+    this.tracks = const [], this.markers = const [],
     this.scriptText, this.timingMode = TimingMode.automatic,
     this.aspectRatio = VideoAspectRatio.ratio16x9,
     this.resolution = VideoResolution.res1080p, this.fps = 30,
@@ -126,7 +128,8 @@ class Project {
   Project copyWith({
     String? id, String? name, List<ImageItem>? images, VoiceOver? voiceOver,
     List<AudioClipItem>? audioClips, List<TextOverlayItem>? textOverlays,
-    List<TimelineTrackItem>? tracks, bool clearVoiceOver = false,
+    List<TimelineTrackItem>? tracks, List<TimelineMarker>? markers,
+    bool clearVoiceOver = false,
     String? scriptText, TimingMode? timingMode, VideoAspectRatio? aspectRatio,
     VideoResolution? resolution, int? fps,
   }) {
@@ -136,6 +139,7 @@ class Project {
       audioClips: clearVoiceOver ? const [] : (audioClips ?? this.audioClips),
       textOverlays: textOverlays ?? this.textOverlays,
       tracks: tracks ?? this.tracks,
+      markers: markers ?? this.markers,
       scriptText: scriptText ?? this.scriptText, timingMode: timingMode ?? this.timingMode,
       aspectRatio: aspectRatio ?? this.aspectRatio, resolution: resolution ?? this.resolution, fps: fps ?? this.fps,
     );

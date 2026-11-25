@@ -28,6 +28,7 @@ class ImageItem {
   final int? sourceDurationMs;
   final int sourceStartOffsetMs;
   final bool isMuted;
+  final bool isMarked;
 
   const ImageItem({
     required this.id,
@@ -50,6 +51,7 @@ class ImageItem {
     this.sourceDurationMs,
     this.sourceStartOffsetMs = 0,
     this.isMuted = false,
+    this.isMarked = false,
   });
 
   bool get isColorBackground => backgroundColorValue != null;
@@ -80,6 +82,7 @@ class ImageItem {
     int? sourceDurationMs,
     int? sourceStartOffsetMs,
     bool? isMuted,
+    bool? isMarked,
   }) {
     return ImageItem(
       id: id ?? this.id,
@@ -102,6 +105,7 @@ class ImageItem {
       sourceDurationMs: sourceDurationMs ?? this.sourceDurationMs,
       sourceStartOffsetMs: sourceStartOffsetMs ?? this.sourceStartOffsetMs,
       isMuted: isMuted ?? this.isMuted,
+      isMarked: isMarked ?? this.isMarked,
     );
   }
 
@@ -125,12 +129,14 @@ class ImageItem {
           trackId == other.trackId &&
           transform == other.transform &&
           sourceStartOffsetMs == other.sourceStartOffsetMs &&
+          isMuted == other.isMuted &&
+          isMarked == other.isMarked &&
           listEquals(animations, other.animations);
 
   @override
   int get hashCode => Object.hash(
         id, filePath, displayName, orderIndex, userStartTimestampInput,
         userEndTimestampInput, startMs, endMs, durationMs, fitMode,
-        validationError, backgroundColorValue, trackId, transform, sourceStartOffsetMs, Object.hashAll(animations),
+        validationError, backgroundColorValue, trackId, transform, sourceStartOffsetMs, isMuted, isMarked, Object.hashAll(animations),
       );
 }

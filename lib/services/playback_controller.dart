@@ -35,6 +35,13 @@ class PlaybackController {
         _player.setVolume(_activeClip!.volume.clamp(0.0, 1.0));
       }
     });
+    _ref.listen<Project>(projectProvider, (_, next) {
+      final activeVid = _findActiveVideoClip(next, _ref.read(playheadPositionProvider));
+      if (activeVid != null && VideoPlaybackEngine.currentClipId == activeVid.id) {
+        final isVideoMuted = !next.isTrackVisible(activeVid.trackId) || next.isTrackMuted(activeVid.trackId) || activeVid.isMuted;
+        VideoPlaybackEngine.setVolume(isVideoMuted ? 0.0 : 100.0);
+      }
+    });
   }
 
   void stopAudioIfActive(String clipId) {
@@ -212,9 +219,9 @@ class PlaybackController {
     // Start hardware-accelerated video playback
     final video = _findActiveVideoClip(project, startMs);
     if (video != null) {
-      final isTrackHidden = !project.isTrackVisible(video.trackId);
+      final isVideoMuted = !project.isTrackVisible(video.trackId) || project.isTrackMuted(video.trackId) || video.isMuted;
       final offsetMs = _calculateVideoSourceOffset(video, startMs);
-      await VideoPlaybackEngine.playVideo(video, offsetMs, isMuted: isTrackHidden);
+      await VideoPlaybackEngine.playVideo(video, offsetMs, isMuted: isVideoMuted);
     }
 
     _startClock();

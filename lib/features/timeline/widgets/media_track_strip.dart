@@ -156,8 +156,7 @@ class MediaTrackStrip extends ConsumerWidget {
                           ref.read(selectedClipIdsProvider.notifier).state = range;
                         }
                       } else {
-                        ref.read(selectedClipIdsProvider.notifier).state = {img.id};
-                        ref.read(selectedImageIdProvider.notifier).state = img.id;
+                        SelectionHelper.selectImage(ref, img.id);
                         ref.read(playbackControllerProvider).seek(img.startMs);
                       }
                     },

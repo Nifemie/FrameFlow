@@ -14,6 +14,7 @@ import 'widgets/fit_mode_selector.dart';
 import 'widgets/inline_color_picker.dart';
 import 'widgets/text_properties_editor.dart';
 import 'widgets/timestamp_editor.dart';
+import 'widgets/video_range_dialog.dart';
 
 class PropertiesPanel extends ConsumerWidget {
   const PropertiesPanel({super.key});
@@ -107,6 +108,50 @@ class PropertiesPanel extends ConsumerWidget {
                 const Divider(height: 1, color: AppColors.surfaceBorder),
                 const SizedBox(height: 10),
                 if (selectedItem.isVideo) ...[
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.surfaceBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Video Source Range', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.accentOrange)),
+                            if (selectedItem.sourceDurationMs != null && selectedItem.sourceDurationMs! > 0)
+                              Text(
+                                'Total: ${TimeParser.formatStandard(selectedItem.sourceDurationMs!)}',
+                                style: const TextStyle(fontSize: 9.5, color: AppColors.textMuted),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${TimeParser.formatStandard(selectedItem.sourceStartOffsetMs)} → ${TimeParser.formatStandard(selectedItem.sourceStartOffsetMs + selectedItem.durationMs)}',
+                          style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 28,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              side: const BorderSide(color: AppColors.accentOrange),
+                            ),
+                            icon: const Icon(Icons.movie_filter_outlined, size: 13, color: AppColors.accentOrange),
+                            label: const Text('Cut / Set Range (In - Out)', style: TextStyle(fontSize: 10.5, color: Colors.white, fontWeight: FontWeight.bold)),
+                            onPressed: () => showDialog(context: context, builder: (_) => VideoRangeDialog(item: selectedItem!)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Builder(
                     builder: (context) {
                       final isMuted = selectedItem!.isMuted || project.isTrackMuted(selectedItem.trackId);

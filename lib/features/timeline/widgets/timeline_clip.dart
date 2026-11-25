@@ -7,6 +7,7 @@ import '../../../models/image_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../services/video_metadata_service.dart';
 import '../services/timeline_zoom_controller.dart';
+import 'asset_context_menus.dart';
 import 'clip_insert_button.dart';
 import 'clip_trim_handle.dart';
 
@@ -135,14 +136,21 @@ class _TimelineClipState extends ConsumerState<TimelineClip> {
                       ],
                     ),
                     if (width >= 55)
-                      Align(
-                        alignment: Alignment.bottomRight,
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 36),
-                          padding: const EdgeInsets.symmetric(horizontal: 2.5, vertical: 1),
-                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(2)),
-                          child: FittedBox(fit: BoxFit.scaleDown, child: Text('${(item.durationMs / 1000).toStringAsFixed(1)}s', style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary))),
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (item.isMarked)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 4),
+                              child: Icon(Icons.bookmark, size: 12, color: Colors.amber),
+                            ),
+                          Container(
+                            constraints: const BoxConstraints(maxWidth: 36),
+                            padding: const EdgeInsets.symmetric(horizontal: 2.5, vertical: 1),
+                            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(2)),
+                            child: FittedBox(fit: BoxFit.scaleDown, child: Text('${(item.durationMs / 1000).toStringAsFixed(1)}s', style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary))),
+                          ),
+                        ],
                       ),
                   ],
                 ),
@@ -212,6 +220,12 @@ class _TimelineClipState extends ConsumerState<TimelineClip> {
             childWhenDragging: _buildContent(width, isGhost: true),
             child: GestureDetector(
               onTap: widget.onTap,
+              onSecondaryTapUp: (details) => AssetContextMenus.showMediaClipMenu(
+                context: context,
+                ref: ref,
+                globalPosition: details.globalPosition,
+                item: item,
+              ),
               child: _buildContent(width),
             ),
           ),

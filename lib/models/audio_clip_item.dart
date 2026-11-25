@@ -10,6 +10,7 @@ class AudioClipItem {
   final int durationMs;
   final double volume; // 0.0 to 1.5 (1.0 = 100%)
   final int orderIndex;
+  final bool isMarked;
 
   const AudioClipItem({
     required this.id,
@@ -20,6 +21,7 @@ class AudioClipItem {
     required this.durationMs,
     this.volume = 1.0,
     required this.orderIndex,
+    this.isMarked = false,
   });
 
   int get endTimelineMs => startTimelineMs + durationMs;
@@ -33,6 +35,7 @@ class AudioClipItem {
     int? durationMs,
     double? volume,
     int? orderIndex,
+    bool? isMarked,
   }) {
     return AudioClipItem(
       id: id ?? this.id,
@@ -43,6 +46,7 @@ class AudioClipItem {
       durationMs: durationMs ?? this.durationMs,
       volume: volume ?? this.volume,
       orderIndex: orderIndex ?? this.orderIndex,
+      isMarked: isMarked ?? this.isMarked,
     );
   }
 }

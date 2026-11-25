@@ -8,6 +8,7 @@ import '../models/audio_clip_item.dart';
 import '../models/image_item.dart';
 import '../models/project.dart';
 import '../models/text_overlay_item.dart';
+import '../models/timeline_marker.dart';
 import '../models/voice_over.dart';
 import 'timing_engine.dart';
 
@@ -37,6 +38,7 @@ class ProjectStorageService {
         'durationMs': c.durationMs,
         'volume': c.volume,
         'orderIndex': c.orderIndex,
+        'isMarked': c.isMarked,
       }).toList(),
       'images': project.images.map((img) => {
         'id': img.id, 'filePath': img.filePath, 'displayName': img.displayName,
@@ -45,10 +47,13 @@ class ProjectStorageService {
         'backgroundColorValue': img.backgroundColorValue, 'trackId': img.trackId,
         'sourceStartOffsetMs': img.sourceStartOffsetMs,
         'sourceDurationMs': img.sourceDurationMs,
+        'isMuted': img.isMuted,
+        'isMarked': img.isMarked,
         'transform': img.transform.toJson(),
         'animations': img.animations.map((a) => a.toJson()).toList(),
       }).toList(),
       'textOverlays': project.textOverlays.map((t) => t.toJson()).toList(),
+      'markers': project.markers.map((m) => m.toMap()).toList(),
     };
   }
 
@@ -103,6 +108,8 @@ class ProjectStorageService {
         trackId: imgMap['trackId'] as String? ?? 'track_v1',
         sourceStartOffsetMs: imgMap['sourceStartOffsetMs'] as int? ?? 0,
         sourceDurationMs: imgMap['sourceDurationMs'] as int?,
+        isMuted: imgMap['isMuted'] as bool? ?? false,
+        isMarked: imgMap['isMarked'] as bool? ?? false,
         transform: transform,
         animations: anims,
       );
@@ -123,11 +130,16 @@ class ProjectStorageService {
         durationMs: cm['durationMs'] as int,
         volume: (cm['volume'] as num?)?.toDouble() ?? 1.0,
         orderIndex: cm['orderIndex'] as int,
+        isMarked: cm['isMarked'] as bool? ?? false,
       );
     }).toList();
 
     final textOverlays = (map['textOverlays'] as List<dynamic>? ?? []).map((t) {
       return TextOverlayItem.fromJson(t as Map<String, dynamic>);
+    }).toList();
+
+    final markers = (map['markers'] as List<dynamic>? ?? []).map((m) {
+      return TimelineMarker.fromMap(m as Map<String, dynamic>);
     }).toList();
 
     return Project(
@@ -137,6 +149,7 @@ class ProjectStorageService {
       voiceOver: voiceOver,
       audioClips: audioClips,
       textOverlays: textOverlays,
+      markers: markers,
       scriptText: map['scriptText'] as String?,
       timingMode: timingMode,
       aspectRatio: ratio,

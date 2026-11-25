@@ -146,6 +146,8 @@ class VideoPlaybackEngine {
           play: true,
         );
         _isOpening = false;
+        // Re-apply target volume after media open in case mpv resets volume on stream change
+        await _player!.setVolume(targetVolume);
       } else {
         final curPos = _player!.state.position.inMilliseconds;
         if ((curPos - offsetMs).abs() > 100) {

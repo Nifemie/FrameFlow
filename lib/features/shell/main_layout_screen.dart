@@ -20,8 +20,160 @@ import '../timeline/widgets/animation_randomisation_dialog.dart';
 import 'widgets/bottom_status_bar.dart';
 import 'widgets/top_nav_bar.dart';
 
-class MainLayoutScreen extends ConsumerWidget {
+class MainLayoutScreen extends ConsumerStatefulWidget {
   const MainLayoutScreen({super.key});
+
+  @override
+  ConsumerState<MainLayoutScreen> createState() => _MainLayoutScreenState();
+}
+
+class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
+    super.dispose();
+  }
+
+  bool _handleGlobalKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent || !mounted) return false;
+    // Do not intercept if a modal dialog is open or user is typing in a text field
+    if (ModalRoute.of(context)?.isCurrent != true) return false;
+
+    final focus = FocusManager.instance.primaryFocus;
+    final isTyping = focus != null &&
+        (focus.context?.widget is EditableText ||
+            focus.context?.findAncestorWidgetOfExactType<EditableText>() != null);
+    if (isTyping) {
+      if (HardwareKeyboard.instance.isControlPressed && event.logicalKey == LogicalKeyboardKey.keyS) {
+        _quickSave(context, ref);
+        return true;
+      }
+      return false;
+    }
+
+    final playback = ref.read(playbackControllerProvider);
+    final notifier = ref.read(projectProvider.notifier);
+    final shortcuts = ref.read(shortcutProvider);
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+
+    if (isCtrl) {
+      if (event.logicalKey == LogicalKeyboardKey.keyZ) {
+        if (isShift) {
+          if (notifier.redo() && mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(duration: Duration(milliseconds: 800), content: Text('↪️ Redo')));
+          }
+        } else {
+          if (notifier.undo() && mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(duration: Duration(milliseconds: 800), content: Text('↩️ Undo')));
+          }
+        }
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.keyY) {
+        if (notifier.redo() && mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(duration: Duration(milliseconds: 800), content: Text('↪️ Redo')));
+        }
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.keyS) { _quickSave(context, ref); return true; }
+      if (event.logicalKey == LogicalKeyboardKey.keyN) { notifier.newProject(); return true; }
+      if (event.logicalKey == LogicalKeyboardKey.keyE) { showDialog(context: context, builder: (_) => const ExportDialog()); return true; }
+      if (event.logicalKey == LogicalKeyboardKey.keyD) {
+        final sel = ref.read(selectedImageIdProvider);
+        if (sel != null) notifier.duplicateImage(sel);
+        return true;
+      }
+      if (isShift && event.logicalKey == LogicalKeyboardKey.keyA) {
+        showDialog(context: context, builder: (_) => const AnimationRandomisationDialog());
+        return true;
+      }
+      return false;
+    }
+
+    if (event.logicalKey == shortcuts.playPauseKey) { playback.togglePlayPause(); return true; }
+    if (event.logicalKey == shortcuts.splitKey) { _splitClip(context, ref); return true; }
+    if (event.logicalKey == shortcuts.stampKey) { _stampCut(context, ref); return true; }
+    if (event.logicalKey == LogicalKeyboardKey.keyK) {
+      final ms = ref.read(playheadPositionProvider);
+      final count = ref.read(projectProvider).markers.length + 1;
+      notifier.addMarker(ms, label: 'Marker $count');
+      return true;
+    }
+    if (event.logicalKey == shortcuts.deleteKey || event.logicalKey == LogicalKeyboardKey.delete || event.logicalKey == LogicalKeyboardKey.backspace) {
+      final audioSel = ref.read(selectedAudioClipIdProvider);
+      if (audioSel != null) {
+        notifier.deleteAudioClip(audioSel);
+        ref.read(selectedAudioClipIdProvider.notifier).state = null;
+        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            duration: Duration(milliseconds: 1000),
+            content: Text('🗑️ Removed audio clip'),
+          ));
+        }
+        return true;
+      }
+
+      final textSel = ref.read(selectedTextOverlayIdProvider);
+      if (textSel != null) {
+        notifier.deleteTextOverlay(textSel);
+        ref.read(selectedTextOverlayIdProvider.notifier).state = null;
+        return true;
+      }
+
+      final multiSel = ref.read(selectedClipIdsProvider);
+      final singleSel = ref.read(selectedImageIdProvider);
+      final toDelete = multiSel.isNotEmpty ? multiSel : (singleSel != null ? {singleSel} : <String>{});
+      if (toDelete.isNotEmpty) {
+        notifier.removeClipsPreservingGaps(toDelete);
+        ref.read(selectedClipIdsProvider.notifier).state = {};
+        ref.read(selectedImageIdProvider.notifier).state = null;
+        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: const Duration(milliseconds: 1000),
+            content: Text('🗑️ Removed ${toDelete.length} clip(s) — blank space preserved'),
+          ));
+        }
+      }
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) { playback.stepPrevious(); return true; }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) { playback.stepNext(); return true; }
+    if (event.logicalKey == LogicalKeyboardKey.equal) {
+      final z = ref.read(timelineZoomProvider);
+      ref.read(timelineZoomProvider.notifier).state = (z + 0.25).clamp(TimelineZoomController.minZoom, TimelineZoomController.maxZoom);
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.minus) {
+      final z = ref.read(timelineZoomProvider);
+      ref.read(timelineZoomProvider.notifier).state = (z - 0.25).clamp(TimelineZoomController.minZoom, TimelineZoomController.maxZoom);
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.home) {
+      if (isShift) { playback.seek(0); } else {
+        final totalMs = ref.read(projectProvider).totalDurationMs;
+        final w = MediaQuery.of(context).size.width - 64;
+        ref.read(timelineZoomProvider.notifier).state = TimelineZoomController.calculateFitZoom(totalDurationMs: totalMs, viewportWidth: w);
+      }
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.end && isShift) {
+      playback.seek(ref.read(projectProvider).totalDurationMs);
+      return true;
+    }
+    return false;
+  }
 
   void _stampCut(BuildContext context, WidgetRef ref) {
     final playheadMs = ref.read(playheadPositionProvider);
@@ -63,126 +215,14 @@ class MainLayoutScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final playback = ref.read(playbackControllerProvider);
-    final notifier = ref.read(projectProvider.notifier);
-    final shortcuts = ref.watch(shortcutProvider);
-
-    return Focus(
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-
-        final focus = FocusManager.instance.primaryFocus;
-        final isTyping = focus != null && focus != node && (focus.context?.widget is EditableText || focus.context?.findAncestorWidgetOfExactType<EditableText>() != null);
-        if (isTyping) {
-          if (HardwareKeyboard.instance.isControlPressed && event.logicalKey == LogicalKeyboardKey.keyS) {
-            _quickSave(context, ref);
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        }
-
-        final isCtrl = HardwareKeyboard.instance.isControlPressed, isShift = HardwareKeyboard.instance.isShiftPressed;
-        if (isCtrl) {
-          if (event.logicalKey == LogicalKeyboardKey.keyZ) {
-            if (isShift) { notifier.redo(); } else if (notifier.undo() && context.mounted) {
-              ScaffoldMessenger.of(context).clearSnackBars();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(duration: Duration(milliseconds: 800), content: Text('↩️ Undo')));
-            }
-            return KeyEventResult.handled;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.keyY) {
-            if (notifier.redo() && context.mounted) {
-              ScaffoldMessenger.of(context).clearSnackBars();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(duration: Duration(milliseconds: 800), content: Text('↪️ Redo')));
-            }
-            return KeyEventResult.handled;
-          }
-          if (event.logicalKey == LogicalKeyboardKey.keyS) { _quickSave(context, ref); return KeyEventResult.handled; }
-          if (event.logicalKey == LogicalKeyboardKey.keyN) { notifier.newProject(); return KeyEventResult.handled; }
-          if (event.logicalKey == LogicalKeyboardKey.keyE) { showDialog(context: context, builder: (_) => const ExportDialog()); return KeyEventResult.handled; }
-          if (event.logicalKey == LogicalKeyboardKey.keyD) {
-            final sel = ref.read(selectedImageIdProvider);
-            if (sel != null) notifier.duplicateImage(sel);
-            return KeyEventResult.handled;
-          }
-          if (isShift && event.logicalKey == LogicalKeyboardKey.keyA) {
-            showDialog(context: context, builder: (_) => const AnimationRandomisationDialog());
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        }
-
-        if (event.logicalKey == shortcuts.playPauseKey) { playback.togglePlayPause(); return KeyEventResult.handled; }
-        if (event.logicalKey == shortcuts.splitKey) { _splitClip(context, ref); return KeyEventResult.handled; }
-        if (event.logicalKey == shortcuts.stampKey) { _stampCut(context, ref); return KeyEventResult.handled; }
-        if (event.logicalKey == shortcuts.deleteKey || event.logicalKey == LogicalKeyboardKey.delete || event.logicalKey == LogicalKeyboardKey.backspace) {
-          final audioSel = ref.read(selectedAudioClipIdProvider);
-          if (audioSel != null) {
-            notifier.deleteAudioClip(audioSel);
-            ref.read(selectedAudioClipIdProvider.notifier).state = null;
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).clearSnackBars();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                duration: Duration(milliseconds: 1000),
-                content: Text('🗑️ Removed audio clip'),
-              ));
-            }
-            return KeyEventResult.handled;
-          }
-
-          final multiSel = ref.read(selectedClipIdsProvider);
-          final singleSel = ref.read(selectedImageIdProvider);
-          final toDelete = multiSel.isNotEmpty ? multiSel : (singleSel != null ? {singleSel} : <String>{});
-          if (toDelete.isNotEmpty) {
-            notifier.removeClipsPreservingGaps(toDelete);
-            ref.read(selectedClipIdsProvider.notifier).state = {};
-            ref.read(selectedImageIdProvider.notifier).state = null;
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).clearSnackBars();
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                duration: const Duration(milliseconds: 1000),
-                content: Text('🗑️ Removed ${toDelete.length} clip(s) — blank space preserved'),
-              ));
-            }
-          }
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) { playback.stepPrevious(); return KeyEventResult.handled; }
-        if (event.logicalKey == LogicalKeyboardKey.arrowRight) { playback.stepNext(); return KeyEventResult.handled; }
-        if (event.logicalKey == LogicalKeyboardKey.equal) {
-          final z = ref.read(timelineZoomProvider);
-          ref.read(timelineZoomProvider.notifier).state = (z + 0.25).clamp(TimelineZoomController.minZoom, TimelineZoomController.maxZoom);
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.minus) {
-          final z = ref.read(timelineZoomProvider);
-          ref.read(timelineZoomProvider.notifier).state = (z - 0.25).clamp(TimelineZoomController.minZoom, TimelineZoomController.maxZoom);
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.home) {
-          if (isShift) { playback.seek(0); } else {
-            final totalMs = ref.read(projectProvider).totalDurationMs;
-            final w = MediaQuery.of(context).size.width - 64;
-            ref.read(timelineZoomProvider.notifier).state = TimelineZoomController.calculateFitZoom(totalDurationMs: totalMs, viewportWidth: w);
-          }
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.end && isShift) {
-          playback.seek(ref.read(projectProvider).totalDurationMs);
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Scaffold(
-        body: Column(
-          children: [
-            const TopNavBar(),
-            Expanded(child: _buildWorkspaceArea(context, ref)),
-            const BottomStatusBar(),
-          ],
-        ),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          const TopNavBar(),
+          Expanded(child: _buildWorkspaceArea(context, ref)),
+          const BottomStatusBar(),
+        ],
       ),
     );
   }

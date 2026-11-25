@@ -82,9 +82,9 @@ if %FFPROBE_FOUND% equ 0 (
 echo.
 
 :: 3. Run Automated Unit Tests
-echo [3/4] Running Automated Unit Tests (test/timing_engine_test.dart)...
+echo [3/4] Running All Automated Unit ^& E2E Tests...
 echo -------------------------------------------------------------------------------
-call flutter test test/timing_engine_test.dart
+call flutter test
 if %ERRORLEVEL% neq 0 (
     echo.
     echo [FAIL] One or more unit tests failed!

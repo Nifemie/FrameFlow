@@ -17,6 +17,9 @@ class UndoRedoManager {
 
   /// Records a snapshot of [currentState] before a mutation is applied.
   void recordSnapshot(Project currentState) {
+    if (_undoStack.isNotEmpty && identical(_undoStack.last, currentState)) {
+      return;
+    }
     _undoStack.add(currentState);
     if (_undoStack.length > maxHistory) {
       _undoStack.removeAt(0);

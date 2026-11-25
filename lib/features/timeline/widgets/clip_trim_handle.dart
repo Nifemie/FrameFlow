@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/image_item.dart';
 import '../../../providers/project_provider.dart';
+import '../../../providers/selection_provider.dart';
+import '../../../services/timeline_arrangement_service.dart';
 import '../services/timeline_zoom_controller.dart';
 
 class ClipTrimHandle extends ConsumerStatefulWidget {
@@ -40,6 +42,7 @@ class _ClipTrimHandleState extends ConsumerState<ClipTrimHandle> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onHorizontalDragStart: (_) {
+          ref.read(projectProvider.notifier).recordSnapshot();
           _accumulatedDelta = 0;
           _initialEndMs = widget.item.endMs;
         },
@@ -48,8 +51,26 @@ class _ClipTrimHandleState extends ConsumerState<ClipTrimHandle> {
           final deltaMs = ((_accumulatedDelta / pxPerSec) * 1000).round();
           int newEndMs = max(widget.item.startMs + 200, _initialEndMs + deltaMs);
 
-          if (voiceOverDuration != null && (newEndMs - voiceOverDuration).abs() < 250) {
-            newEndMs = voiceOverDuration;
+          final snapOn = ref.read(snappingEnabledProvider);
+          if (snapOn) {
+            final project = ref.read(projectProvider);
+            final targets = <int>[
+              ref.read(playheadPositionProvider),
+              ?voiceOverDuration,
+              ...project.markers.map((m) => m.timestampMs),
+              ...project.images.where((i) => i.id != widget.item.id).expand((i) => [i.startMs, i.endMs]),
+              ...project.textOverlays.expand((t) => [t.startMs, t.endMs]),
+            ];
+            final (snapped, line) = TimelineArrangementService.snapToTargets(
+              targetMs: newEndMs,
+              targets: targets,
+              pxPerSec: pxPerSec,
+              enabled: true,
+            );
+            newEndMs = max(widget.item.startMs + 200, snapped);
+            ref.read(activeSnapLineMsProvider.notifier).state = line;
+          } else {
+            ref.read(activeSnapLineMsProvider.notifier).state = null;
           }
 
           ref.read(projectProvider.notifier).trimClipEnd(
@@ -59,11 +80,7 @@ class _ClipTrimHandleState extends ConsumerState<ClipTrimHandle> {
           );
         },
         onHorizontalDragEnd: (_) {
-          ref.read(projectProvider.notifier).trimClipEnd(
-            widget.item.id,
-            widget.item.endMs,
-            recordUndo: true,
-          );
+          ref.read(activeSnapLineMsProvider.notifier).state = null;
         },
         child: Container(
           width: 12,

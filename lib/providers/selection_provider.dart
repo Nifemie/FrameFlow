@@ -34,3 +34,41 @@ final isPlayingProvider = StateProvider<bool>((ref) => false);
 
 /// Tracks timeline horizontal zoom scale factor (1.0 = normal, 2.0 = zoomed in).
 final timelineZoomProvider = StateProvider<double>((ref) => 1.0);
+
+/// Tracks whether CapCut-style magnetic snapping is active on the timeline.
+final snappingEnabledProvider = StateProvider<bool>((ref) => true);
+
+/// Holds the active snap guide line position in milliseconds while dragging/trimming.
+final activeSnapLineMsProvider = StateProvider<int?>((ref) => null);
+
+/// Unified selection helpers so clicking any image, video, text, or audio
+/// clears conflicting selections and immediately displays that asset's properties.
+class SelectionHelper {
+  static void selectImage(WidgetRef ref, String id) {
+    ref.read(selectedAudioClipIdProvider.notifier).state = null;
+    ref.read(selectedTextOverlayIdProvider.notifier).state = null;
+    ref.read(selectedClipIdsProvider.notifier).state = {id};
+    ref.read(selectedImageIdProvider.notifier).state = id;
+  }
+
+  static void selectTextOverlay(WidgetRef ref, String id) {
+    ref.read(selectedAudioClipIdProvider.notifier).state = null;
+    ref.read(selectedImageIdProvider.notifier).state = null;
+    ref.read(selectedClipIdsProvider.notifier).state = {};
+    ref.read(selectedTextOverlayIdProvider.notifier).state = id;
+  }
+
+  static void selectAudioClip(WidgetRef ref, String id) {
+    ref.read(selectedImageIdProvider.notifier).state = null;
+    ref.read(selectedClipIdsProvider.notifier).state = {};
+    ref.read(selectedTextOverlayIdProvider.notifier).state = null;
+    ref.read(selectedAudioClipIdProvider.notifier).state = id;
+  }
+
+  static void clearAll(WidgetRef ref) {
+    ref.read(selectedImageIdProvider.notifier).state = null;
+    ref.read(selectedClipIdsProvider.notifier).state = {};
+    ref.read(selectedTextOverlayIdProvider.notifier).state = null;
+    ref.read(selectedAudioClipIdProvider.notifier).state = null;
+  }
+}

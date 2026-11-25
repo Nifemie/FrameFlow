@@ -11,6 +11,7 @@ import '../models/audio_clip_item.dart';
 import '../models/image_item.dart';
 import '../models/project.dart';
 import '../models/text_overlay_item.dart';
+import '../models/timeline_marker.dart';
 import '../models/timeline_track_item.dart';
 import '../models/voice_over.dart';
 import '../services/alignment_service.dart';
@@ -48,8 +49,11 @@ class ProjectNotifier extends StateNotifier<Project> {
           if (durMs > 0) {
             final current = state.images.where((img) => img.id == item.id).firstOrNull;
             if (current != null) {
+              // Store sourceDurationMs and set initial timeline duration without creating a second undo step
+              final withSource = state.images.map((img) => img.id == item.id ? img.copyWith(sourceDurationMs: durMs) : img).toList();
+              state = state.copyWith(images: withSource);
               final newEnd = current.startMs + durMs;
-              updateTimestamp(item.id, (newEnd / 1000).toStringAsFixed(2));
+              updateTimestamp(item.id, (newEnd / 1000).toStringAsFixed(2), recordUndo: false);
             }
           }
         });
@@ -99,19 +103,30 @@ class ProjectNotifier extends StateNotifier<Project> {
       return;
     }
     _undoRedo.recordSnapshot(state);
-    state = state.copyWith(images: TimingEngine.calculateSequence(images: state.images.where((img) => img.id != id).toList(), voiceOverDurationMs: state.voiceOver?.durationMs));
+    final updated = TimingEngine.calculateSequence(images: state.images.where((img) => img.id != id).toList(), voiceOverDurationMs: state.voiceOver?.durationMs);
+    state = _pruneEmptySecondaryTracks(state.copyWith(images: updated));
   }
 
   void removeClipsPreservingGaps(Set<String> clipIds) {
     if (clipIds.isEmpty) return;
     _undoRedo.recordSnapshot(state);
-    state = state.copyWith(
-      images: ClipEditingService.deleteClipPreservingGaps(
-        images: state.images,
-        clipIdsToDelete: clipIds,
-        voiceOverDurationMs: state.voiceOver?.durationMs,
-      ),
+    final updated = ClipEditingService.deleteClipPreservingGaps(
+      images: state.images,
+      clipIdsToDelete: clipIds,
+      voiceOverDurationMs: state.voiceOver?.durationMs,
     );
+    state = _pruneEmptySecondaryTracks(state.copyWith(images: updated));
+  }
+
+  Project _pruneEmptySecondaryTracks(Project p) {
+    if (p.tracks.isEmpty) return p;
+    final remaining = p.tracks.where((t) {
+      if (t.type == TrackType.mainVideo || t.id == 'track_v1') return true;
+      if (t.type == TrackType.audio) return p.audioClips.isNotEmpty || p.voiceOver != null;
+      if (t.type == TrackType.text) return p.textOverlays.isNotEmpty;
+      return p.images.any((img) => img.trackId == t.id);
+    }).toList();
+    return remaining.length == p.tracks.length ? p : p.copyWith(tracks: remaining);
   }
 
   void applyAlignment({required Set<String> targetIds, required AlignmentType type}) {
@@ -164,8 +179,10 @@ class ProjectNotifier extends StateNotifier<Project> {
           if (durMs > 0) {
             final current = state.images.where((img) => img.id == inserted.id).firstOrNull;
             if (current != null) {
+              final withSource = state.images.map((img) => img.id == inserted.id ? img.copyWith(sourceDurationMs: durMs) : img).toList();
+              state = state.copyWith(images: withSource);
               final newEnd = current.startMs + durMs;
-              updateTimestamp(inserted.id, (newEnd / 1000).toStringAsFixed(2));
+              updateTimestamp(inserted.id, (newEnd / 1000).toStringAsFixed(2), recordUndo: false);
             }
           }
         });
@@ -175,7 +192,94 @@ class ProjectNotifier extends StateNotifier<Project> {
     }
   }
 
-  void updateTimestamp(String imageId, String? timestampInput) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimingEngine.updateImageTimestamp(images: state.images, imageId: imageId, newTimestampInput: timestampInput, voiceOverDurationMs: state.voiceOver?.durationMs)); }
+  void updateTimestamp(String imageId, String? timestampInput, {bool recordUndo = true}) {
+    if (recordUndo) _undoRedo.recordSnapshot(state);
+    state = state.copyWith(images: TimingEngine.updateImageTimestamp(images: state.images, imageId: imageId, newTimestampInput: timestampInput, voiceOverDurationMs: state.voiceOver?.durationMs));
+  }
+
+  /// Sets a specific source range [sourceStartMs..sourceEndMs] for a video clip
+  /// (e.g., 5min to 8min out of a 10min video -> 3min timeline clip).
+  void updateVideoSourceRange(String clipId, int sourceStartMs, int sourceEndMs) {
+    final idx = state.images.indexWhere((img) => img.id == clipId);
+    if (idx < 0) return;
+    final clip = state.images[idx];
+    final clampedStart = sourceStartMs.clamp(0, (clip.sourceDurationMs ?? sourceEndMs) - 200);
+    final clampedEnd = sourceEndMs.clamp(clampedStart + 200, clip.sourceDurationMs ?? sourceEndMs);
+    final newDurationMs = clampedEnd - clampedStart;
+
+    _undoRedo.recordSnapshot(state);
+    final newEndTimelineMs = clip.startMs + newDurationMs;
+    final updated = List<ImageItem>.from(state.images);
+    updated[idx] = clip.copyWith(
+      sourceStartOffsetMs: clampedStart,
+      userStartTimestampInput: clip.userStartTimestampInput ?? (clip.startMs / 1000.0).toStringAsFixed(2),
+      userEndTimestampInput: (newEndTimelineMs / 1000.0).toStringAsFixed(2),
+    );
+    state = state.copyWith(
+      images: TimingEngine.calculateSequence(
+        images: updated,
+        voiceOverDurationMs: state.voiceOver?.durationMs,
+        snapFinalImageToAudio: false,
+      ),
+    );
+  }
+
+  void autoArrangeFromLeft({String? trackId}) {
+    _undoRedo.recordSnapshot(state);
+    state = state.copyWith(
+      images: TimelineArrangementService.autoArrangeFromLeft(
+        images: state.images,
+        trackId: trackId,
+        voiceOverDurationMs: state.voiceOver?.durationMs,
+      ),
+    );
+  }
+
+  void toggleAssetMark(String id) {
+    _undoRedo.recordSnapshot(state);
+    if (state.images.any((i) => i.id == id)) {
+      state = state.copyWith(
+        images: state.images.map((i) => i.id == id ? i.copyWith(isMarked: !i.isMarked) : i).toList(),
+      );
+      return;
+    }
+    if (state.textOverlays.any((t) => t.id == id)) {
+      state = state.copyWith(
+        textOverlays: state.textOverlays.map((t) => t.id == id ? t.copyWith(isMarked: !t.isMarked) : t).toList(),
+      );
+      return;
+    }
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    if (clips.any((a) => a.id == id)) {
+      state = state.copyWith(
+        audioClips: clips.map((a) => a.id == id ? a.copyWith(isMarked: !a.isMarked) : a).toList(),
+      );
+    }
+  }
+
+  void addMarker(int timestampMs, {String label = 'Marker', int colorValue = 0xFFFF5C36}) {
+    _undoRedo.recordSnapshot(state);
+    final m = TimelineMarker(
+      id: _uuid.v4(),
+      timestampMs: timestampMs.clamp(0, 36000000),
+      label: label,
+      colorValue: colorValue,
+    );
+    final updated = [...state.markers, m]..sort((a, b) => a.timestampMs.compareTo(b.timestampMs));
+    state = state.copyWith(markers: updated);
+  }
+
+  void removeMarker(String markerId) {
+    _undoRedo.recordSnapshot(state);
+    state = state.copyWith(markers: state.markers.where((m) => m.id != markerId).toList());
+  }
+
+  void renameMarker(String markerId, String newLabel) {
+    _undoRedo.recordSnapshot(state);
+    state = state.copyWith(
+      markers: state.markers.map((m) => m.id == markerId ? m.copyWith(label: newLabel) : m).toList(),
+    );
+  }
   void updateStartTimestamp(String imageId, String? startInput) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimingEngine.updateImageStartTimestamp(images: state.images, imageId: imageId, newStartInput: startInput, voiceOverDurationMs: state.voiceOver?.durationMs)); }
   void applyBulkTimestamps(List<String> timestampList, {String? trackId}) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimingEngine.applyBulkTimestamps(images: state.images, timestampList: timestampList, voiceOverDurationMs: state.voiceOver?.durationMs, trackId: trackId)); }
 
@@ -346,7 +450,10 @@ class ProjectNotifier extends StateNotifier<Project> {
   void removeTrack(String trackId) {
     _undoRedo.recordSnapshot(state);
     final target = state.effectiveTracks.where((t) => t.id == trackId).firstOrNull;
-    final updatedTracks = state.effectiveTracks.where((t) => t.id != trackId).toList();
+    final isMainTrack = target?.type == TrackType.mainVideo || trackId == 'track_v1';
+    final updatedTracks = isMainTrack
+        ? state.effectiveTracks
+        : state.effectiveTracks.where((t) => t.id != trackId).toList();
     final isAudio = target?.type == TrackType.audio;
     final isText = target?.type == TrackType.text;
     state = state.copyWith(
@@ -361,7 +468,7 @@ class ProjectNotifier extends StateNotifier<Project> {
   void recordSnapshot() => _undoRedo.recordSnapshot(state);
   void addTextOverlay(TextOverlayItem item) { _undoRedo.recordSnapshot(state); state = state.copyWith(textOverlays: TextEditingService.addOverlay(state.textOverlays, item)); }
   void updateTextOverlay(TextOverlayItem item, {bool recordUndo = true}) { if (recordUndo) _undoRedo.recordSnapshot(state); state = state.copyWith(textOverlays: TextEditingService.updateOverlay(state.textOverlays, item)); }
-  void deleteTextOverlay(String id) { _undoRedo.recordSnapshot(state); state = state.copyWith(textOverlays: TextEditingService.deleteOverlay(state.textOverlays, id)); }
+  void deleteTextOverlay(String id) { _undoRedo.recordSnapshot(state); state = _pruneEmptySecondaryTracks(state.copyWith(textOverlays: TextEditingService.deleteOverlay(state.textOverlays, id))); }
   void trimTextOverlay(String id, {int? startMs, int? durationMs, bool recordUndo = true}) { if (recordUndo) _undoRedo.recordSnapshot(state); state = state.copyWith(textOverlays: TextEditingService.trimOverlay(state.textOverlays, id, startMs: startMs, durationMs: durationMs)); }
 
   void updateImageTransform(String imageId, AssetTransform t, {bool recordUndo = true}) { if (recordUndo) _undoRedo.recordSnapshot(state); state = AssetAnimationService.updateTransform(state, imageId, t); }

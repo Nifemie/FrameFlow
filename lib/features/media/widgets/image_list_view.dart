@@ -8,6 +8,7 @@ import '../../../models/image_item.dart';
 import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../timeline/widgets/asset_context_menus.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
 import 'folder_import_dialog.dart';
 import 'image_card.dart';
@@ -195,17 +196,22 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                           ),
                         ),
                       ),
-                      child: ImageCard(
-                        item: item,
-                        isSelected: item.id == selectedId,
-                        onTap: () {
-                          ref.read(selectedImageIdProvider.notifier).state = item.id;
-                          ref.read(selectedTextOverlayIdProvider.notifier).state = null;
-                        },
-                        onRemove: () {
-                          ref.read(projectProvider.notifier).removeImage(item.id);
-                          if (selectedId == item.id) ref.read(selectedImageIdProvider.notifier).state = null;
-                        },
+                      child: GestureDetector(
+                        onSecondaryTapUp: (details) => AssetContextMenus.showMediaClipMenu(
+                          context: context,
+                          ref: ref,
+                          globalPosition: details.globalPosition,
+                          item: item,
+                        ),
+                        child: ImageCard(
+                          item: item,
+                          isSelected: item.id == selectedId,
+                          onTap: () => SelectionHelper.selectImage(ref, item.id),
+                          onRemove: () {
+                            ref.read(projectProvider.notifier).removeImage(item.id);
+                            if (selectedId == item.id) SelectionHelper.clearAll(ref);
+                          },
+                        ),
                       ),
                     );
                   },

@@ -29,6 +29,7 @@ class TextOverlayItem {
   final TextAnimationType animationType;
   final int animationDurationMs; // In duration
   final int animationOutDurationMs; // Out duration
+  final bool isMarked;
 
   const TextOverlayItem({
     required this.id,
@@ -54,6 +55,7 @@ class TextOverlayItem {
     this.animationType = TextAnimationType.fadeIn,
     this.animationDurationMs = 350,
     this.animationOutDurationMs = 350,
+    this.isMarked = false,
   });
 
   int get endMs => startMs + durationMs;
@@ -83,6 +85,7 @@ class TextOverlayItem {
     TextAnimationType? animationType,
     int? animationDurationMs,
     int? animationOutDurationMs,
+    bool? isMarked,
   }) {
     return TextOverlayItem(
       id: id ?? this.id,
@@ -108,6 +111,7 @@ class TextOverlayItem {
       animationType: animationType ?? this.animationType,
       animationDurationMs: animationDurationMs ?? this.animationDurationMs,
       animationOutDurationMs: animationOutDurationMs ?? this.animationOutDurationMs,
+      isMarked: isMarked ?? this.isMarked,
     );
   }
 
@@ -135,6 +139,7 @@ class TextOverlayItem {
     'animationType': animationType.name,
     'animationDurationMs': animationDurationMs,
     'animationOutDurationMs': animationOutDurationMs,
+    'isMarked': isMarked,
   };
 
   factory TextOverlayItem.fromJson(Map<String, dynamic> json) => TextOverlayItem(
@@ -161,5 +166,6 @@ class TextOverlayItem {
     animationType: TextAnimationType.values.firstWhere((e) => e.name == json['animationType'], orElse: () => TextAnimationType.fadeIn),
     animationDurationMs: json['animationDurationMs'] as int? ?? 350,
     animationOutDurationMs: json['animationOutDurationMs'] as int? ?? 350,
+    isMarked: json['isMarked'] as bool? ?? false,
   );
 }

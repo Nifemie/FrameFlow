@@ -9,6 +9,8 @@ import '../../../models/audio_clip_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../services/audio_probe_service.dart';
+import '../../../services/timeline_arrangement_service.dart';
+import 'asset_context_menus.dart';
 import 'audio_volume_dialog.dart';
 
 class AudioWaveformStrip extends ConsumerWidget {
@@ -212,23 +214,22 @@ class _AudioClipCardState extends ConsumerState<_AudioClipCard> {
   bool _isRightTrimHovered = false;
 
   int _snapToNearest(int valueMs, {int thresholdMs = 150}) {
-    int bestPt = valueMs;
-    int minDiff = thresholdMs + 1;
-    for (final pt in widget.snapPointsMs) {
-      final diff = (valueMs - pt).abs();
-      if (diff <= thresholdMs && diff < minDiff) {
-        minDiff = diff;
-        bestPt = pt;
-      }
+    if (!ref.read(snappingEnabledProvider)) {
+      ref.read(activeSnapLineMsProvider.notifier).state = null;
+      return valueMs;
     }
-    return bestPt;
+    final (snapped, line) = TimelineArrangementService.snapToTargets(
+      targetMs: valueMs,
+      targets: widget.snapPointsMs,
+      pxPerSec: widget.pxPerSec,
+      enabled: true,
+    );
+    ref.read(activeSnapLineMsProvider.notifier).state = line;
+    return snapped;
   }
 
   void _selectThisClip() {
-    ref.read(selectedAudioClipIdProvider.notifier).state = widget.clip.id;
-    ref.read(selectedImageIdProvider.notifier).state = null;
-    ref.read(selectedClipIdsProvider.notifier).state = {};
-    ref.read(selectedTextOverlayIdProvider.notifier).state = null;
+    SelectionHelper.selectAudioClip(ref, widget.clip.id);
   }
 
   @override
@@ -261,8 +262,15 @@ class _AudioClipCardState extends ConsumerState<_AudioClipCard> {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: _selectThisClip,
+                onSecondaryTapUp: (details) => AssetContextMenus.showAudioClipMenu(
+                  context: context,
+                  ref: ref,
+                  globalPosition: details.globalPosition,
+                  clip: clip,
+                ),
                 onDoubleTap: () => showDialog(context: context, builder: (_) => AudioVolumeDialog(clip: clip)),
                 onHorizontalDragStart: (details) {
+                  ref.read(projectProvider.notifier).recordSnapshot();
                   setState(() => _isDragging = true);
                   _dragStartGlobalX = details.globalPosition.dx;
                   _initialStartMs = clip.startTimelineMs;
@@ -281,10 +289,11 @@ class _AudioClipCardState extends ConsumerState<_AudioClipCard> {
                 },
                 onHorizontalDragEnd: (_) {
                   setState(() => _isDragging = false);
-                  ref.read(projectProvider.notifier).moveAudioClipStart(clip.id, _currentDragStartMs, recordUndo: true);
+                  ref.read(activeSnapLineMsProvider.notifier).state = null;
                 },
                 onHorizontalDragCancel: () {
                   setState(() => _isDragging = false);
+                  ref.read(activeSnapLineMsProvider.notifier).state = null;
                 },
                 child: MouseRegion(
                   cursor: _isDragging ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,

@@ -32,14 +32,83 @@ class TimelineArrangementService {
     return [...otherClips, ...updatedTrackClips];
   }
 
+  /// Snaps [targetMs] to the nearest point in [targets] if within [thresholdPx] at [pxPerSec].
+  /// Returns `(snappedMs, matchedSnapLineMs)`.
+  static (int, int?) snapToTargets({
+    required int targetMs,
+    required List<int> targets,
+    required double pxPerSec,
+    bool enabled = true,
+    double thresholdPx = 12.0,
+  }) {
+    if (!enabled || targets.isEmpty || pxPerSec <= 0) return (targetMs, null);
+    final thresholdMs = (thresholdPx / pxPerSec) * 1000.0;
+    int bestMs = targetMs;
+    double bestDist = thresholdMs + 1.0;
+    int? snapLine;
+    for (final t in targets) {
+      final d = (targetMs - t).abs().toDouble();
+      if (d <= thresholdMs && d < bestDist) {
+        bestDist = d;
+        bestMs = t;
+        snapLine = t;
+      }
+    }
+    return (bestMs, snapLine);
+  }
+
+  /// Packs clips sequentially from 00:00 (left) removing all blank spaces.
+  static List<ImageItem> autoArrangeFromLeft({
+    required List<ImageItem> images,
+    String? trackId,
+    int? voiceOverDurationMs,
+  }) {
+    if (images.isEmpty) return const [];
+    final trackIds = trackId != null ? {trackId} : images.map((i) => i.trackId).toSet();
+    final result = <ImageItem>[];
+    for (final img in images) {
+      if (!trackIds.contains(img.trackId)) result.add(img);
+    }
+    for (final tid in trackIds) {
+      final trackClips = images.where((i) => i.trackId == tid).toList()
+        ..sort((a, b) => a.startMs.compareTo(b.startMs));
+      result.addAll(_recalcTrackDurations(trackClips, tid, voiceOverDurationMs));
+    }
+    return result;
+  }
+
   static List<ImageItem> moveClipStart({required List<ImageItem> images, required String clipId, required int newStartMs, int? voiceOverDurationMs}) {
     final idx = images.indexWhere((img) => img.id == clipId);
     if (idx < 0) return images;
     final target = images[idx], dur = target.durationMs > 0 ? target.durationMs : 5000;
-    final startSec = (newStartMs.clamp(0, 3600000) / 1000.0).toStringAsFixed(2);
-    final endSec = ((newStartMs + dur) / 1000.0).toStringAsFixed(2);
-    final updated = List<ImageItem>.from(images);
-    updated[idx] = target.copyWith(userStartTimestampInput: startSec, userEndTimestampInput: endSec);
+    final clampedStart = newStartMs.clamp(0, 3600000);
+    final startSec = (clampedStart / 1000.0).toStringAsFixed(2);
+    final endSec = ((clampedStart + dur) / 1000.0).toStringAsFixed(2);
+    final updated = <ImageItem>[];
+    for (int i = 0; i < images.length; i++) {
+      final img = images[i];
+      if (i == idx) {
+        updated.add(target.copyWith(
+          startMs: clampedStart,
+          endMs: clampedStart + dur,
+          userStartTimestampInput: startSec,
+          userEndTimestampInput: endSec,
+          clearValidationError: true,
+        ));
+      } else if (img.trackId == target.trackId) {
+        // Lock other clips on the same track at their existing positions so blank spaces aren't pushed
+        updated.add(img.copyWith(
+          userStartTimestampInput: img.userStartTimestampInput ?? (img.startMs / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: img.userEndTimestampInput ?? (img.endMs / 1000.0).toStringAsFixed(2),
+        ));
+      } else {
+        updated.add(img);
+      }
+    }
+    updated.sort((a, b) {
+      if (a.trackId != b.trackId) return a.trackId.compareTo(b.trackId);
+      return a.startMs.compareTo(b.startMs);
+    });
     return TimingEngine.calculateSequence(images: updated, voiceOverDurationMs: voiceOverDurationMs, snapFinalImageToAudio: false);
   }
 
@@ -94,14 +163,30 @@ class TimelineArrangementService {
     final idx = images.indexWhere((i) => i.id == clipId);
     if (idx < 0) return images;
     final clip = images[idx], dur = clip.durationMs > 0 ? clip.durationMs : 5000;
-    final list = List<ImageItem>.from(images)..removeAt(idx);
+    final list = <ImageItem>[];
+    for (int i = 0; i < images.length; i++) {
+      if (i == idx) continue;
+      final other = images[i];
+      if (other.trackId == targetTrackId) {
+        list.add(other.copyWith(
+          userStartTimestampInput: other.userStartTimestampInput ?? (other.startMs / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: other.userEndTimestampInput ?? (other.endMs / 1000.0).toStringAsFixed(2),
+        ));
+      } else {
+        list.add(other);
+      }
+    }
     final movedClip = clip.copyWith(
       trackId: targetTrackId, startMs: startMs, endMs: startMs + dur, durationMs: dur,
       userStartTimestampInput: (startMs / 1000.0).toStringAsFixed(2),
       userEndTimestampInput: ((startMs + dur) / 1000.0).toStringAsFixed(2),
+      clearValidationError: true,
     );
     list.add(movedClip);
-    list.sort((a, b) => a.startMs.compareTo(b.startMs));
+    list.sort((a, b) {
+      if (a.trackId != b.trackId) return a.trackId.compareTo(b.trackId);
+      return a.startMs.compareTo(b.startMs);
+    });
     for (int i = 0; i < list.length; i++) { list[i] = list[i].copyWith(orderIndex: i); }
     return TimingEngine.calculateSequence(images: list, voiceOverDurationMs: voiceOverDurationMs, snapFinalImageToAudio: false);
   }

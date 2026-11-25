@@ -86,7 +86,6 @@ class TrackHeaderColumn extends ConsumerWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 4),
               itemBuilder: (context, idx) {
                 final tr = tracks[idx];
-                final canDelete = tr.type != TrackType.mainVideo;
                 final isVideo = tr.isVideoOrBg;
                 final badgeColor = tr.type == TrackType.overlayVideo ? Colors.cyanAccent : (tr.type == TrackType.backgroundUnderlay ? Colors.purpleAccent : (tr.type == TrackType.text ? Colors.amber : (tr.type == TrackType.audio ? AppColors.waveform : AppColors.clipBlue)));
 
@@ -97,10 +96,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                     if (tr.type == TrackType.audio) {
                       final clips = ref.read(projectProvider).effectiveAudioClips;
                       if (clips.isNotEmpty) {
-                        ref.read(selectedAudioClipIdProvider.notifier).state = clips.first.id;
-                        ref.read(selectedImageIdProvider.notifier).state = null;
-                        ref.read(selectedClipIdsProvider.notifier).state = {};
-                        ref.read(selectedTextOverlayIdProvider.notifier).state = null;
+                        SelectionHelper.selectAudioClip(ref, clips.first.id);
                       }
                     }
                   },
@@ -118,6 +114,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                       : null,
                   onAddMedia: isVideo ? () => _pickImages(ref, tr.id) : null,
                   onAddBg: isVideo ? () => notifier.addColorBackground(trackId: tr.id) : null,
+                  onAutoArrange: isVideo ? () => notifier.autoArrangeFromLeft(trackId: tr.id) : null,
                   onTimestamp: (isVideo || tr.type == TrackType.audio)
                       ? () => showDialog(
                             context: context,
@@ -128,7 +125,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                             ),
                           )
                       : null,
-                  onDelete: canDelete ? () => notifier.removeTrack(tr.id) : null,
+                  onDelete: () => notifier.removeTrack(tr.id),
                 );
               },
             ),
@@ -141,7 +138,7 @@ class TrackHeaderColumn extends ConsumerWidget {
   Widget _buildRow({
     required BuildContext context, required String label, required double height, required bool isVisible,
     required bool isMuted, required Color badgeColor, required VoidCallback onToggleVis, VoidCallback? onToggleMute,
-    VoidCallback? onAddMedia, VoidCallback? onAddBg, VoidCallback? onTimestamp, VoidCallback? onDelete,
+    VoidCallback? onAddMedia, VoidCallback? onAddBg, VoidCallback? onAutoArrange, VoidCallback? onTimestamp, VoidCallback? onDelete,
     VoidCallback? onTap,
   }) {
     return InkWell(
@@ -181,7 +178,13 @@ class TrackHeaderColumn extends ConsumerWidget {
               ],
               if (onDelete != null) ...[
                 const SizedBox(width: 4),
-                IconButton(icon: const Icon(Icons.close, size: 12, color: AppColors.textMuted), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onDelete),
+                IconButton(
+                  tooltip: 'Delete / Clear Track',
+                  icon: const Icon(Icons.delete_outline, size: 12, color: AppColors.errorRed),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: onDelete,
+                ),
               ],
             ],
           ),
@@ -197,6 +200,10 @@ class TrackHeaderColumn extends ConsumerWidget {
                 if (onAddMedia != null) ...[
                   const SizedBox(width: 6),
                   IconButton(tooltip: 'Add Media / Images', icon: const Icon(Icons.add_photo_alternate_outlined, size: 13, color: AppColors.clipBlueLight), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onAddMedia),
+                ],
+                if (onAutoArrange != null) ...[
+                  const SizedBox(width: 6),
+                  IconButton(tooltip: 'Auto-Rearrange from Left (Pack)', icon: const Icon(Icons.format_align_left, size: 13, color: Colors.cyanAccent), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onAutoArrange),
                 ],
               ],
             ),

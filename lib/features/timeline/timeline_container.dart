@@ -192,6 +192,83 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                     letterSpacing: 0.8,
                   ),
                 ),
+                const SizedBox(width: 12),
+                // CapCut-style Snapping Toggle
+                Consumer(
+                  builder: (context, ref, _) {
+                    final snapOn = ref.watch(snappingEnabledProvider);
+                    return InkWell(
+                      onTap: () => ref.read(snappingEnabledProvider.notifier).state = !snapOn,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: snapOn ? AppColors.accentOrange.withValues(alpha: 0.2) : AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: snapOn ? AppColors.accentOrange : AppColors.surfaceBorder),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.vertical_align_center, size: 11, color: snapOn ? AppColors.accentOrange : AppColors.textMuted),
+                            const SizedBox(width: 4),
+                            Text(
+                              snapOn ? 'Snap ON' : 'Snap OFF',
+                              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: snapOn ? AppColors.accentOrange : AppColors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                // Add Timeline Marker at Playhead
+                InkWell(
+                  onTap: () {
+                    final ms = ref.read(playheadPositionProvider);
+                    ref.read(projectProvider.notifier).addMarker(ms, label: 'Marker ${project.markers.length + 1}');
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppColors.surfaceBorder),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bookmark_add_outlined, size: 11, color: Colors.amber),
+                        SizedBox(width: 4),
+                        Text('Mark (K)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Auto-Rearrange from Left (Pack)
+                InkWell(
+                  onTap: () => ref.read(projectProvider.notifier).autoArrangeFromLeft(),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppColors.surfaceBorder),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.format_align_left, size: 11, color: Colors.cyanAccent),
+                        SizedBox(width: 4),
+                        Text('Pack Left', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                ),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.remove, size: 14, color: AppColors.textSecondary),
@@ -362,6 +439,57 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                           ),
                                         ),
                                       ],
+                                    ),
+
+                                    // Timeline Markers (clickable pins + vertical guide lines)
+                                    for (final marker in project.markers)
+                                      Positioned(
+                                        left: (marker.timestampMs / 1000) * pxPerSec - 6,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: 12,
+                                        child: GestureDetector(
+                                          onTap: () => _handleSeek(marker.timestampMs),
+                                          onSecondaryTapUp: (details) async {
+                                            final action = await showMenu<String>(
+                                              context: context,
+                                              color: AppColors.surface,
+                                              position: RelativeRect.fromLTRB(details.globalPosition.dx, details.globalPosition.dy, details.globalPosition.dx, details.globalPosition.dy),
+                                              items: const [
+                                                PopupMenuItem(value: 'seek', child: Text('Jump to Marker', style: TextStyle(fontSize: 11, color: Colors.white))),
+                                                PopupMenuItem(value: 'delete', child: Text('Delete Marker', style: TextStyle(fontSize: 11, color: AppColors.errorRed))),
+                                              ],
+                                            );
+                                            if (action == 'seek') _handleSeek(marker.timestampMs);
+                                            if (action == 'delete') ref.read(projectProvider.notifier).removeMarker(marker.id);
+                                          },
+                                          child: Tooltip(
+                                            message: marker.label,
+                                            child: Column(
+                                              children: [
+                                                Icon(Icons.bookmark, size: 13, color: marker.color),
+                                                Expanded(child: Container(width: 1, color: marker.color.withValues(alpha: 0.5))),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+
+                                    // Active Magnetic Snap Guide Line
+                                    Consumer(
+                                      builder: (context, ref, _) {
+                                        final snapMs = ref.watch(activeSnapLineMsProvider);
+                                        if (snapMs == null) return const SizedBox.shrink();
+                                        return Positioned(
+                                          left: (snapMs / 1000) * pxPerSec,
+                                          top: 0,
+                                          bottom: 0,
+                                          width: 1.5,
+                                          child: IgnorePointer(
+                                            child: Container(color: Colors.cyanAccent),
+                                          ),
+                                        );
+                                      },
                                     ),
 
                                     Consumer(

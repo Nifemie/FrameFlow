@@ -6,6 +6,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../models/text_overlay_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../services/timeline_arrangement_service.dart';
+import 'asset_context_menus.dart';
 
 class TextTimelineItem extends ConsumerStatefulWidget {
   final TextOverlayItem item;
@@ -31,23 +33,21 @@ class _TextTimelineItemState extends ConsumerState<TextTimelineItem> {
   int _dragDurationMs = 0;
 
   int _snap(int target, double thresholdMs) {
-    for (final b in widget.boundaries) {
-      if ((target - b).abs() <= thresholdMs) return b;
-    }
-    return target;
+    final snapOn = ref.read(snappingEnabledProvider);
+    final (snapped, line) = TimelineArrangementService.snapToTargets(
+      targetMs: target,
+      targets: widget.boundaries,
+      pxPerSec: widget.pxPerSec,
+      enabled: snapOn,
+    );
+    ref.read(activeSnapLineMsProvider.notifier).state = line;
+    return snapped;
   }
 
   void _onMoveStart() {
     ref.read(projectProvider.notifier).recordSnapshot();
     _accumulatedDelta = 0.0;
     _dragStartMs = widget.item.startMs;
-  }
-
-  void _onMoveUpdate(DragUpdateDetails d) {
-    _accumulatedDelta += d.delta.dx;
-    final deltaMs = ((_accumulatedDelta / widget.pxPerSec) * 1000).round();
-    final newStart = max(0, _dragStartMs + deltaMs);
-    ref.read(projectProvider.notifier).trimTextOverlay(widget.item.id, startMs: newStart, recordUndo: false);
   }
 
   void _onResizeLeftStart() {
@@ -104,17 +104,31 @@ class _TextTimelineItemState extends ConsumerState<TextTimelineItem> {
             Positioned.fill(
               left: 14, right: 14,
               child: GestureDetector(
-                onTap: () {
-                  ref.read(selectedTextOverlayIdProvider.notifier).state = item.id;
-                  ref.read(selectedImageIdProvider.notifier).state = null;
-                },
+                onTap: () => SelectionHelper.selectTextOverlay(ref, item.id),
+                onSecondaryTapUp: (details) => AssetContextMenus.showTextOverlayMenu(
+                  context: context,
+                  ref: ref,
+                  globalPosition: details.globalPosition,
+                  item: item,
+                ),
                 onHorizontalDragStart: (_) => _onMoveStart(),
-                onHorizontalDragUpdate: _onMoveUpdate,
+                onHorizontalDragUpdate: (d) {
+                  _accumulatedDelta += d.delta.dx;
+                  final deltaMs = ((_accumulatedDelta / widget.pxPerSec) * 1000).round();
+                  final rawStart = max(0, _dragStartMs + deltaMs);
+                  final snappedStart = _snap(rawStart, 12.0 / widget.pxPerSec * 1000);
+                  ref.read(projectProvider.notifier).trimTextOverlay(widget.item.id, startMs: snappedStart, recordUndo: false);
+                },
+                onHorizontalDragEnd: (_) => ref.read(activeSnapLineMsProvider.notifier).state = null,
                 child: Container(
                   color: Colors.transparent, padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                   child: Row(
                     children: [
                       const Icon(Icons.title, size: 12, color: Colors.amber),
+                      if (item.isMarked) ...[
+                        const SizedBox(width: 2),
+                        const Icon(Icons.bookmark, size: 11, color: Colors.amber),
+                      ],
                       const SizedBox(width: 4),
                       Expanded(child: Text(item.text, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white), overflow: TextOverflow.ellipsis)),
                       Text('${(item.durationMs / 1000).toStringAsFixed(1)}s', style: const TextStyle(fontSize: 8.5, color: Colors.amberAccent)),

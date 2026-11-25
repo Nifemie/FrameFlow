@@ -6,6 +6,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/image_item.dart';
 import '../../../providers/project_provider.dart';
+import '../../../providers/selection_provider.dart';
+import '../../../services/timeline_arrangement_service.dart';
 
 class TimelineGapItem extends ConsumerWidget {
   final int startMs;
@@ -45,7 +47,35 @@ class TimelineGapItem extends ConsumerWidget {
       child: DragTarget<ImageItem>(
         onWillAcceptWithDetails: (_) => true,
         onAcceptWithDetails: (details) {
-          ref.read(projectProvider.notifier).moveImageClipStart(details.data.id, startMs);
+          final box = context.findRenderObject() as RenderBox?;
+          int dropMs = startMs;
+          if (box != null && box.hasSize) {
+            final local = box.globalToLocal(details.offset);
+            final offsetMs = ((local.dx.clamp(0.0, box.size.width) / pxPerSec) * 1000).round();
+            dropMs = (startMs + offsetMs).clamp(startMs, endMs - 200);
+          }
+          final snapOn = ref.read(snappingEnabledProvider);
+          final project = ref.read(projectProvider);
+          final targets = <int>[
+            startMs,
+            endMs,
+            ref.read(playheadPositionProvider),
+            ...project.markers.map((m) => m.timestampMs),
+          ];
+          final (snappedMs, _) = TimelineArrangementService.snapToTargets(
+            targetMs: dropMs,
+            targets: targets,
+            pxPerSec: pxPerSec,
+            enabled: snapOn,
+          );
+          final targetStart = snappedMs.clamp(startMs, endMs - 200);
+          ref.read(projectProvider.notifier).fillBlankGap(
+            startMs: targetStart,
+            endMs: endMs,
+            trackId: trackId,
+            isColorBg: false,
+            existingClipId: details.data.id,
+          );
         },
         builder: (context, candidateData, _) {
           final isTargeted = candidateData.isNotEmpty;

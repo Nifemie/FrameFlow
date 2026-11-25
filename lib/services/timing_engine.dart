@@ -46,8 +46,12 @@ class TimingEngine {
       if (isLast && snapFinalImageToAudio && voiceOverDurationMs != null && voiceOverDurationMs > 0 && voiceOverDurationMs > startMs) {
         endMs = voiceOverDurationMs;
       } else if (parsedUserEnd != null) {
-        endMs = parsedUserEnd;
-        if (endMs <= startMs) validationError = 'End time must be after start time (${TimeParser.formatDetailed(startMs)})';
+        if (parsedUserEnd <= startMs) {
+          validationError = 'End time must be after start time (${TimeParser.formatDetailed(startMs)})';
+          endMs = startMs + (item.durationMs > 0 ? item.durationMs : defaultImageDurationMs);
+        } else {
+          endMs = parsedUserEnd;
+        }
       } else {
         if (isLast && snapFinalImageToAudio && voiceOverDurationMs != null && voiceOverDurationMs > startMs) {
           endMs = voiceOverDurationMs;
