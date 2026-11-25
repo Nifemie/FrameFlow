@@ -7,12 +7,16 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/time_parser.dart';
 import '../../providers/project_provider.dart';
 import '../../providers/selection_provider.dart';
+import '../../providers/shortcut_provider.dart';
 import '../../services/playback_controller.dart';
 import '../../services/project_storage_service.dart';
+import '../export/widgets/export_dialog.dart';
 import '../media/media_panel.dart';
 import '../preview/preview_panel.dart';
 import '../properties/properties_panel.dart';
+import '../timeline/services/timeline_zoom_controller.dart';
 import '../timeline/timeline_container.dart';
+import '../timeline/widgets/animation_randomisation_dialog.dart';
 import 'widgets/bottom_status_bar.dart';
 import 'widgets/top_nav_bar.dart';
 
@@ -22,87 +26,262 @@ class MainLayoutScreen extends ConsumerWidget {
   void _stampCut(BuildContext context, WidgetRef ref) {
     final playheadMs = ref.read(playheadPositionProvider);
     final fileName = ref.read(projectProvider.notifier).stampCurrentCutPoint(playheadMs);
-
-    if (fileName != null) {
-      final timeFormatted = TimeParser.formatDetailed(playheadMs);
+    if (fileName != null && context.mounted) {
+      final timeStr = TimeParser.formatDetailed(playheadMs);
       ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(milliseconds: 1500),
-          backgroundColor: AppColors.surfaceLight,
-          content: Text(
-            '✂️ Cut "$fileName" stamped at $timeFormatted',
-            style: const TextStyle(fontSize: 12, color: AppColors.accentOrange, fontWeight: FontWeight.bold),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(milliseconds: 1200),
+        backgroundColor: AppColors.surfaceLight,
+        content: Text('✂️ Cut "$fileName" at $timeStr', style: const TextStyle(fontSize: 12, color: AppColors.accentOrange, fontWeight: FontWeight.bold)),
+      ));
+    }
+  }
+
+  void _splitClip(BuildContext context, WidgetRef ref) {
+    final playhead = ref.read(playheadPositionProvider);
+    final selectedAudioId = ref.read(selectedAudioClipIdProvider);
+    final ok = ref.read(projectProvider.notifier).smartSplitAtPlayhead(playhead, selectedAudioId: selectedAudioId);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(milliseconds: 1200),
+        content: Text(ok ? '✂️ Clip split at ${TimeParser.formatDetailed(playhead)}' : 'Cannot split: place playhead inside clip (>100ms from edges)'),
+      ));
     }
   }
 
   Future<void> _quickSave(BuildContext context, WidgetRef ref) async {
     final project = ref.read(projectProvider);
     final defaultFileName = '${project.name.toLowerCase().replaceAll(' ', '_')}.frameflow';
-
     final savePath = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save Project',
-      fileName: defaultFileName,
-      type: FileType.custom,
-      allowedExtensions: ['frameflow'],
+      dialogTitle: 'Save Project', fileName: defaultFileName, type: FileType.custom, allowedExtensions: ['frameflow'],
     );
-
     if (savePath != null) {
       await ProjectStorageService.saveProject(project, savePath);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Project saved to $savePath')),
-        );
-      }
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved to $savePath')));
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playback = ref.read(playbackControllerProvider);
+    final notifier = ref.read(projectProvider.notifier);
+    final shortcuts = ref.watch(shortcutProvider);
 
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.space): () {
-          playback.togglePlayPause();
-        },
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
-          playback.stepPrevious();
-        },
-        const SingleActivator(LogicalKeyboardKey.arrowRight): () {
-          playback.stepNext();
-        },
-        const SingleActivator(LogicalKeyboardKey.keyM): () {
-          _stampCut(context, ref);
-        },
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
-          _quickSave(context, ref);
-        },
-        const SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
-          ref.read(projectProvider.notifier).newProject();
-        },
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+        final focus = FocusManager.instance.primaryFocus;
+        final isTyping = focus != null && focus != node && (focus.context?.widget is EditableText || focus.context?.findAncestorWidgetOfExactType<EditableText>() != null);
+        if (isTyping) {
+          if (HardwareKeyboard.instance.isControlPressed && event.logicalKey == LogicalKeyboardKey.keyS) {
+            _quickSave(context, ref);
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        }
+
+        final isCtrl = HardwareKeyboard.instance.isControlPressed, isShift = HardwareKeyboard.instance.isShiftPressed;
+        if (isCtrl) {
+          if (event.logicalKey == LogicalKeyboardKey.keyZ) {
+            if (isShift) { notifier.redo(); } else if (notifier.undo() && context.mounted) {
+              ScaffoldMessenger.of(context).clearSnackBars();
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(duration: Duration(milliseconds: 800), content: Text('↩️ Undo')));
+            }
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.keyY) {
+            if (notifier.redo() && context.mounted) {
+              ScaffoldMessenger.of(context).clearSnackBars();
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(duration: Duration(milliseconds: 800), content: Text('↪️ Redo')));
+            }
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.keyS) { _quickSave(context, ref); return KeyEventResult.handled; }
+          if (event.logicalKey == LogicalKeyboardKey.keyN) { notifier.newProject(); return KeyEventResult.handled; }
+          if (event.logicalKey == LogicalKeyboardKey.keyE) { showDialog(context: context, builder: (_) => const ExportDialog()); return KeyEventResult.handled; }
+          if (event.logicalKey == LogicalKeyboardKey.keyD) {
+            final sel = ref.read(selectedImageIdProvider);
+            if (sel != null) notifier.duplicateImage(sel);
+            return KeyEventResult.handled;
+          }
+          if (isShift && event.logicalKey == LogicalKeyboardKey.keyA) {
+            showDialog(context: context, builder: (_) => const AnimationRandomisationDialog());
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        }
+
+        if (event.logicalKey == shortcuts.playPauseKey) { playback.togglePlayPause(); return KeyEventResult.handled; }
+        if (event.logicalKey == shortcuts.splitKey) { _splitClip(context, ref); return KeyEventResult.handled; }
+        if (event.logicalKey == shortcuts.stampKey) { _stampCut(context, ref); return KeyEventResult.handled; }
+        if (event.logicalKey == shortcuts.deleteKey || event.logicalKey == LogicalKeyboardKey.delete || event.logicalKey == LogicalKeyboardKey.backspace) {
+          final audioSel = ref.read(selectedAudioClipIdProvider);
+          if (audioSel != null) {
+            notifier.deleteAudioClip(audioSel);
+            ref.read(selectedAudioClipIdProvider.notifier).state = null;
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).clearSnackBars();
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                duration: Duration(milliseconds: 1000),
+                content: Text('🗑️ Removed audio clip'),
+              ));
+            }
+            return KeyEventResult.handled;
+          }
+
+          final multiSel = ref.read(selectedClipIdsProvider);
+          final singleSel = ref.read(selectedImageIdProvider);
+          final toDelete = multiSel.isNotEmpty ? multiSel : (singleSel != null ? {singleSel} : <String>{});
+          if (toDelete.isNotEmpty) {
+            notifier.removeClipsPreservingGaps(toDelete);
+            ref.read(selectedClipIdsProvider.notifier).state = {};
+            ref.read(selectedImageIdProvider.notifier).state = null;
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).clearSnackBars();
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                duration: const Duration(milliseconds: 1000),
+                content: Text('🗑️ Removed ${toDelete.length} clip(s) — blank space preserved'),
+              ));
+            }
+          }
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) { playback.stepPrevious(); return KeyEventResult.handled; }
+        if (event.logicalKey == LogicalKeyboardKey.arrowRight) { playback.stepNext(); return KeyEventResult.handled; }
+        if (event.logicalKey == LogicalKeyboardKey.equal) {
+          final z = ref.read(timelineZoomProvider);
+          ref.read(timelineZoomProvider.notifier).state = (z + 0.25).clamp(TimelineZoomController.minZoom, TimelineZoomController.maxZoom);
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.minus) {
+          final z = ref.read(timelineZoomProvider);
+          ref.read(timelineZoomProvider.notifier).state = (z - 0.25).clamp(TimelineZoomController.minZoom, TimelineZoomController.maxZoom);
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.home) {
+          if (isShift) { playback.seek(0); } else {
+            final totalMs = ref.read(projectProvider).totalDurationMs;
+            final w = MediaQuery.of(context).size.width - 64;
+            ref.read(timelineZoomProvider.notifier).state = TimelineZoomController.calculateFitZoom(totalDurationMs: totalMs, viewportWidth: w);
+          }
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.end && isShift) {
+          playback.seek(ref.read(projectProvider).totalDurationMs);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
       },
-      child: const Focus(
-        autofocus: true,
-        child: Scaffold(
-          body: Column(
-            children: [
-              TopNavBar(),
-              Expanded(
-                child: Row(
-                  children: [
-                    MediaPanel(),
-                    Expanded(child: PreviewPanel()),
-                    PropertiesPanel(),
-                  ],
-                ),
+      child: Scaffold(
+        body: Column(
+          children: [
+            const TopNavBar(),
+            Expanded(child: _buildWorkspaceArea(context, ref)),
+            const BottomStatusBar(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWorkspaceArea(BuildContext context, WidgetRef ref) {
+    final focusMode = ref.watch(workspaceFocusModeProvider);
+    final timelineHeight = ref.watch(timelineHeightProvider);
+
+    switch (focusMode) {
+      case WorkspaceFocusMode.timeline:
+        return Column(
+          children: [
+            const SizedBox(
+              height: 200,
+              child: Row(
+                children: [
+                  SizedBox(width: 280, child: MediaPanel()),
+                  Expanded(child: PreviewPanel()),
+                  PropertiesPanel(),
+                ],
               ),
-              TimelineContainer(),
-              BottomStatusBar(),
-            ],
+            ),
+            _buildVerticalSplitter(context, ref),
+            const Expanded(child: TimelineContainer()),
+          ],
+        );
+
+      case WorkspaceFocusMode.preview:
+        return const Column(
+          children: [
+            Expanded(child: PreviewPanel()),
+            SizedBox(height: 220, child: TimelineContainer()),
+          ],
+        );
+
+      case WorkspaceFocusMode.media:
+        return Column(
+          children: [
+            const Expanded(
+              child: Row(
+                children: [
+                  SizedBox(width: 580, child: MediaPanel()),
+                  Expanded(child: PreviewPanel()),
+                  PropertiesPanel(),
+                ],
+              ),
+            ),
+            _buildVerticalSplitter(context, ref),
+            SizedBox(
+              height: timelineHeight.clamp(200.0, 520.0),
+              child: const TimelineContainer(),
+            ),
+          ],
+        );
+
+      case WorkspaceFocusMode.normal:
+        return Column(
+          children: [
+            const Expanded(
+              child: Row(
+                children: [
+                  SizedBox(width: 280, child: MediaPanel()),
+                  Expanded(child: PreviewPanel()),
+                  PropertiesPanel(),
+                ],
+              ),
+            ),
+            _buildVerticalSplitter(context, ref),
+            SizedBox(
+              height: timelineHeight.clamp(200.0, 520.0),
+              child: const TimelineContainer(),
+            ),
+          ],
+        );
+    }
+  }
+
+  Widget _buildVerticalSplitter(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragUpdate: (details) {
+        final currentH = ref.read(timelineHeightProvider);
+        final screenH = MediaQuery.of(context).size.height;
+        final newH = (currentH - details.delta.dy).clamp(160.0, screenH - 220.0);
+        ref.read(timelineHeightProvider.notifier).state = newH;
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeUpDown,
+        child: Container(
+          height: 6,
+          color: AppColors.surface,
+          alignment: Alignment.center,
+          child: Container(
+            width: 36,
+            height: 2,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceBorder,
+              borderRadius: BorderRadius.circular(1),
+            ),
           ),
         ),
       ),

@@ -52,4 +52,5 @@ assets/bin/*.exe
 *.exe
 *.zip
 *.lnk
+*.dll
 installer/Output/

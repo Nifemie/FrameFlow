@@ -17,6 +17,12 @@ SetupIconFile=C:\Users\USER\Desktop\frameflow\windows\runner\resources\app_icon.
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+VersionInfoVersion=1.0.0.0
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoTextVersion={#MyAppVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

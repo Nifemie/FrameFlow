@@ -1,155 +1,144 @@
 import '../core/utils/time_parser.dart';
 import '../models/image_item.dart';
 
-/// The core mathematical timing and synchronization engine for FrameFlow.
-/// Calculates frame/millisecond boundaries, propagates timing updates across clips,
-/// and handles automatic voice-over snapping.
 class TimingEngine {
-  /// Default duration in milliseconds assigned to an image if no timestamp is specified.
   static const int defaultImageDurationMs = 5000;
 
-  /// Recalculates the timing sequence for an entire list of images.
-  /// 
-  /// Rules:
-  /// 1. Image 0 always starts at 0ms.
-  /// 2. Image N starts exactly at Image (N-1)'s endMs.
-  /// 3. If an image has a valid [userEndTimestampInput], its endMs is parsed from it.
-  /// 4. If an image lacks an end timestamp:
-  ///    - If it's the last image and [voiceOverDurationMs] is provided, it automatically
-  ///      extends to [voiceOverDurationMs].
-  ///    - Otherwise, it gets [defaultImageDurationMs].
-  /// 5. If [snapFinalImageToAudio] is true and [voiceOverDurationMs] > 0, the final image
-  ///    always ends at [voiceOverDurationMs].
   static List<ImageItem> calculateSequence({
     required List<ImageItem> images,
     int? voiceOverDurationMs,
     bool snapFinalImageToAudio = true,
   }) {
     if (images.isEmpty) return const [];
+    final trackIds = images.map((i) => i.trackId).toSet();
+    if (trackIds.length > 1) {
+      final res = <ImageItem>[];
+      for (final tid in trackIds) {
+        res.addAll(_calcTrack(images: images.where((i) => i.trackId == tid).toList(), voiceOverDurationMs: voiceOverDurationMs, snapFinalImageToAudio: snapFinalImageToAudio));
+      }
+      return res;
+    }
+    return _calcTrack(images: images, voiceOverDurationMs: voiceOverDurationMs, snapFinalImageToAudio: snapFinalImageToAudio);
+  }
 
+  static List<ImageItem> _calcTrack({required List<ImageItem> images, int? voiceOverDurationMs, bool snapFinalImageToAudio = true}) {
+    if (images.isEmpty) return const [];
     final updated = <ImageItem>[];
-    int currentStartMs = 0;
+    int currentTimelineMs = 0;
 
     for (int i = 0; i < images.length; i++) {
       final item = images[i];
       final isLast = (i == images.length - 1);
-
       String? validationError;
-      int endMs;
+      int startMs = currentTimelineMs;
 
-      // Check user input
-      final parsedUserEnd = TimeParser.parseToMs(item.userEndTimestampInput);
-
-      if (isLast && snapFinalImageToAudio && voiceOverDurationMs != null && voiceOverDurationMs > 0) {
-        // Last image snaps automatically to audio duration
-        if (voiceOverDurationMs <= currentStartMs) {
-          // Edge case: audio is shorter than preceding images
-          endMs = currentStartMs + defaultImageDurationMs;
-          validationError = 'Image exceeds voice-over duration (${TimeParser.formatStandard(voiceOverDurationMs)})';
+      final parsedUserStart = TimeParser.parseToMs(item.userStartTimestampInput);
+      if (parsedUserStart != null) {
+        if (parsedUserStart >= currentTimelineMs) {
+          startMs = parsedUserStart;
         } else {
-          endMs = voiceOverDurationMs;
-        }
-      } else if (parsedUserEnd != null) {
-        endMs = parsedUserEnd;
-        if (endMs <= currentStartMs) {
-          validationError = 'End time must be after start time (${TimeParser.formatDetailed(currentStartMs)})';
-        } else if (voiceOverDurationMs != null && voiceOverDurationMs > 0 && endMs > voiceOverDurationMs) {
-          validationError = 'Timestamp exceeds audio duration (${TimeParser.formatStandard(voiceOverDurationMs)})';
-        }
-      } else {
-        // No timestamp specified
-        if (isLast && voiceOverDurationMs != null && voiceOverDurationMs > currentStartMs) {
-          endMs = voiceOverDurationMs;
-        } else {
-          endMs = currentStartMs + (item.durationMs > 0 ? item.durationMs : defaultImageDurationMs);
+          validationError = 'Start time cannot overlap previous cut (${TimeParser.formatDetailed(currentTimelineMs)})';
         }
       }
 
-      // Compute duration
-      final durationMs = endMs > currentStartMs ? (endMs - currentStartMs) : 0;
+      int endMs;
+      final parsedUserEnd = TimeParser.parseToMs(item.userEndTimestampInput);
+      if (isLast && snapFinalImageToAudio && voiceOverDurationMs != null && voiceOverDurationMs > 0 && voiceOverDurationMs > startMs) {
+        endMs = voiceOverDurationMs;
+      } else if (parsedUserEnd != null) {
+        endMs = parsedUserEnd;
+        if (endMs <= startMs) validationError = 'End time must be after start time (${TimeParser.formatDetailed(startMs)})';
+      } else {
+        if (isLast && snapFinalImageToAudio && voiceOverDurationMs != null && voiceOverDurationMs > startMs) {
+          endMs = voiceOverDurationMs;
+        } else {
+          endMs = startMs + (item.durationMs > 0 ? item.durationMs : defaultImageDurationMs);
+        }
+      }
 
+      final durationMs = endMs > startMs ? (endMs - startMs) : 0;
       updated.add(item.copyWith(
-        orderIndex: i,
-        startMs: currentStartMs,
-        endMs: endMs,
-        durationMs: durationMs,
-        validationError: validationError,
-        clearValidationError: validationError == null,
+        orderIndex: i, startMs: startMs, endMs: endMs, durationMs: durationMs,
+        validationError: validationError, clearValidationError: validationError == null,
       ));
-
-      currentStartMs = endMs;
+      currentTimelineMs = endMs;
     }
-
     return updated;
   }
 
-  /// Updates an individual image's timestamp and automatically recalculates all subsequent clips.
-  static List<ImageItem> updateImageTimestamp({
-    required List<ImageItem> images,
-    required String imageId,
-    required String? newTimestampInput,
-    int? voiceOverDurationMs,
-    bool snapFinalImageToAudio = true,
-  }) {
-    final modified = images.map((img) {
-      if (img.id == imageId) {
-        return img.copyWith(userEndTimestampInput: newTimestampInput);
-      }
-      return img;
-    }).toList();
-
-    return calculateSequence(
-      images: modified,
-      voiceOverDurationMs: voiceOverDurationMs,
-      snapFinalImageToAudio: snapFinalImageToAudio,
-    );
+  static List<ImageItem> updateImageTimestamp({required List<ImageItem> images, required String imageId, required String? newTimestampInput, int? voiceOverDurationMs, bool snapFinalImageToAudio = true}) {
+    final idx = images.indexWhere((img) => img.id == imageId);
+    if (idx == -1) return images;
+    final target = images[idx];
+    final updated = List<ImageItem>.from(images);
+    updated[idx] = target.copyWith(userEndTimestampInput: (newTimestampInput == null || newTimestampInput.trim().isEmpty) ? null : newTimestampInput.trim());
+    return calculateSequence(images: updated, voiceOverDurationMs: voiceOverDurationMs, snapFinalImageToAudio: snapFinalImageToAudio);
   }
 
-  /// Bulk assigns a list of timestamp strings to images in sequential order.
+  static List<ImageItem> updateImageStartTimestamp({required List<ImageItem> images, required String imageId, required String? newStartInput, int? voiceOverDurationMs, bool snapFinalImageToAudio = true}) {
+    final idx = images.indexWhere((img) => img.id == imageId);
+    if (idx == -1) return images;
+    final target = images[idx];
+    final updated = List<ImageItem>.from(images);
+    final trimmed = newStartInput?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      updated[idx] = target.copyWith(clearStartTimestamp: true);
+    } else {
+      updated[idx] = target.copyWith(userStartTimestampInput: trimmed);
+    }
+    return calculateSequence(images: updated, voiceOverDurationMs: voiceOverDurationMs, snapFinalImageToAudio: snapFinalImageToAudio);
+  }
+
   static List<ImageItem> applyBulkTimestamps({
     required List<ImageItem> images,
     required List<String> timestampList,
     int? voiceOverDurationMs,
     bool snapFinalImageToAudio = true,
+    String? trackId,
   }) {
     final modified = <ImageItem>[];
-
+    int trackIdx = 0;
     for (int i = 0; i < images.length; i++) {
       final img = images[i];
-      final stamp = (i < timestampList.length) ? timestampList[i].trim() : null;
-      modified.add(img.copyWith(userEndTimestampInput: stamp));
+      if (trackId != null && img.trackId != trackId) {
+        modified.add(img);
+        continue;
+      }
+      if (trackIdx < timestampList.length) {
+        final raw = timestampList[trackIdx].trim();
+        final rangeParts = _splitRange(raw);
+        if (rangeParts != null && TimeParser.parseToMs(rangeParts[0]) != null && TimeParser.parseToMs(rangeParts[1]) != null) {
+          modified.add(img.copyWith(userStartTimestampInput: rangeParts[0], userEndTimestampInput: rangeParts[1]));
+        } else {
+          modified.add(img.copyWith(clearStartTimestamp: true, userEndTimestampInput: raw));
+        }
+      } else {
+        modified.add(img);
+      }
+      trackIdx++;
     }
-
-    return calculateSequence(
-      images: modified,
-      voiceOverDurationMs: voiceOverDurationMs,
-      snapFinalImageToAudio: snapFinalImageToAudio,
-    );
+    return calculateSequence(images: modified, voiceOverDurationMs: voiceOverDurationMs, snapFinalImageToAudio: snapFinalImageToAudio);
   }
 
-  /// Binary search to find which image is currently active at [playheadMs].
-  /// Returns index in [images], or -1 if outside bounds.
-  static int findActiveImageIndex(List<ImageItem> images, int playheadMs) {
-    if (images.isEmpty) return -1;
-    if (playheadMs < 0) return 0;
-    if (playheadMs >= images.last.endMs) return images.length - 1;
-
-    int low = 0;
-    int high = images.length - 1;
-
-    while (low <= high) {
-      final mid = (low + high) ~/ 2;
-      final item = images[mid];
-
-      if (playheadMs >= item.startMs && playheadMs < item.endMs) {
-        return mid;
-      } else if (playheadMs < item.startMs) {
-        high = mid - 1;
-      } else {
-        low = mid + 1;
+  static List<String>? _splitRange(String text) {
+    for (final sep in [' - ', ' – ', ' — ', ' to ', ' -> ']) {
+      if (text.contains(sep)) {
+        final p = text.split(sep);
+        if (p.length == 2) return [p[0].trim(), p[1].trim()];
       }
     }
+    if (text.contains('-')) {
+      final p = text.split('-');
+      if (p.length == 2 && p[0].contains(':') && p[1].contains(':')) return [p[0].trim(), p[1].trim()];
+    }
+    return null;
+  }
 
-    return (low < images.length) ? low : images.length - 1;
+  static int findActiveImageIndex(List<ImageItem> images, int playheadMs) {
+    if (images.isEmpty) return -1;
+    for (int i = 0; i < images.length; i++) {
+      if (playheadMs >= images[i].startMs && playheadMs < images[i].endMs) return i;
+    }
+    return -1;
   }
 }

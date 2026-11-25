@@ -1,28 +1,44 @@
 import 'package:flutter/material.dart';
 
-/// Professional dark palette inspired by Movavi / CapCut desktop editors.
+/// Professional dark palette inspired by DaVinci Resolve, Premiere Pro & CapCut desktop.
+/// Deep black & dark charcoal with vibrant orange highlights.
 class AppColors {
-  // Base Surfaces
-  static const Color background = Color(0xFF161922);
-  static const Color surface = Color(0xFF1E222D);
-  static const Color surfaceLight = Color(0xFF282E3E);
-  static const Color surfaceBorder = Color(0xFF333A4D);
+  // Base Deep Black & Dark Charcoal Surfaces
+  static const Color background = Color(0xFF0C0D11);
+  static const Color surface = Color(0xFF13151C);
+  static const Color cardSurface = Color(0xFF181B24);
+  static const Color surfaceLight = Color(0xFF202430);
+  static const Color surfaceBorder = Color(0xFF282D3C);
+  static const Color surfaceBorderSubtle = Color(0xFF1C202B);
+  static const Color surfaceBorderHover = Color(0xFF3E4559);
 
-  // Playhead & Accents
-  static const Color accentOrange = Color(0xFFFF5C36);
-  static const Color playheadNeedle = Color(0xFFFF5C36);
+  // Vibrant Orange Primary Accent & Playhead
+  static const Color accentOrange = Color(0xFFFF6600);
+  static const Color accentOrangeHover = Color(0xFFFF7A1A);
+  static const Color playheadNeedle = Color(0xFFFF6600);
+  static const Color selectionOutline = Color(0xFFFF6600);
+  static const Color activeTool = Color(0xFFFF6600);
 
-  // Clips & Waveforms
-  static const Color clipBlue = Color(0xFF3D7BFD);
-  static const Color clipBlueLight = Color(0xFF5D93FF);
-  static const Color waveform = Color(0xFF4A89FF);
+  // Secondary Accents & Status
+  static const Color accentBlue = Color(0xFF3B82F6);
+  static const Color warningYellow = Color(0xFFEAB308);
+  static const Color exportGreen = Color(0xFF10B981);
+  static const Color exportGreenHover = Color(0xFF34D399);
+  static const Color errorRed = Color(0xFFEF4444);
 
-  // Status & Actions
-  static const Color exportGreen = Color(0xFF27AE60);
-  static const Color exportGreenHover = Color(0xFF2ECC71);
-  static const Color errorRed = Color(0xFFE74C3C);
-  static const Color textPrimary = Color(0xFFECEFF4);
-  static const Color textSecondary = Color(0xFF9AA0A6);
+  // Clips & Waveforms (Deep charcoal base with clean colored rims)
+  static const Color clipDefault = Color(0xFF1E232F);
+  static const Color clipBlue = Color(0xFF2563EB);
+  static const Color clipBlueLight = Color(0xFF60A5FA);
+  static const Color waveform = Color(0xFFFF6600);
+
+  // Marquee Selection Box
+  static const Color selectionBox = Color(0x33FF6600);
+  static const Color selectionBoxBorder = Color(0xFFFF6600);
+
+  // Typography
+  static const Color textPrimary = Color(0xFFF3F4F6);
+  static const Color textSecondary = Color(0xFF9CA3AF);
   static const Color textMuted = Color(0xFF6B7280);
 }
 
@@ -34,7 +50,7 @@ class AppTheme {
       cardColor: AppColors.surface,
       dividerColor: AppColors.surfaceBorder,
       colorScheme: const ColorScheme.dark(
-        primary: AppColors.clipBlue,
+        primary: AppColors.accentOrange,
         secondary: AppColors.accentOrange,
         surface: AppColors.surface,
         error: AppColors.errorRed,
