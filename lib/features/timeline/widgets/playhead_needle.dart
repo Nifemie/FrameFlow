@@ -4,45 +4,63 @@ import '../../../core/theme/app_theme.dart';
 class PlayheadNeedle extends StatelessWidget {
   final double positionX;
   final double height;
-  final ValueChanged<double> onDragUpdate;
+  final GestureDragStartCallback? onDragStart;
+  final GestureDragUpdateCallback onDragUpdate;
+  final VoidCallback? onDragEnd;
 
   const PlayheadNeedle({
     super.key,
     required this.positionX,
     required this.height,
+    this.onDragStart,
     required this.onDragUpdate,
+    this.onDragEnd,
   });
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: positionX - 6,
+      left: positionX - 12,
       top: 0,
       bottom: 0,
-      width: 12,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragUpdate: (details) {
-          onDragUpdate(details.delta.dx);
-        },
-        child: Stack(
-          alignment: Alignment.topCenter,
-          children: [
-            // Vertical orange line
-            Container(
-              margin: const EdgeInsets.only(top: 8),
-              width: 2,
-              height: height,
-              color: AppColors.playheadNeedle,
+      width: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          // Visual needle line down all tracks (non-blocking for underlying clips)
+          Positioned(
+            top: 10,
+            bottom: 0,
+            width: 2,
+            child: IgnorePointer(
+              child: Container(
+                width: 2,
+                height: height,
+                color: AppColors.playheadNeedle,
+              ),
             ),
-
-            // Top orange marker handle
-            CustomPaint(
-              size: const Size(12, 10),
-              painter: _PlayheadMarkerPainter(),
+          ),
+          // Top grabbable ruler marker
+          Positioned(
+            top: 0,
+            width: 24,
+            height: 20,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.grab,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: onDragStart,
+                onHorizontalDragUpdate: onDragUpdate,
+                onHorizontalDragEnd: (_) => onDragEnd?.call(),
+                child: CustomPaint(
+                  size: const Size(16, 12),
+                  painter: _PlayheadMarkerPainter(),
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

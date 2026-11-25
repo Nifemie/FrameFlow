@@ -16,7 +16,18 @@ class AppConstants {
     'png',
     'webp',
     'bmp',
-    'tiff'
+    'tiff',
+    'jfif',
+    'gif',
+    'avif',
+  ];
+
+  static const List<String> supportedVideoExtensions = [
+    'mp4',
+    'mov',
+    'webm',
+    'avi',
+    'mkv',
   ];
 
   static const List<String> supportedAudioExtensions = [
@@ -26,4 +37,25 @@ class AppConstants {
     'm4a',
     'flac'
   ];
+
+  static List<String> get supportedMediaExtensions => [
+    ...supportedVideoExtensions,
+    ...supportedImageExtensions,
+    ...supportedAudioExtensions,
+  ];
+
+  static bool isVideoFile(String path) {
+    final ext = path.split('.').last.toLowerCase();
+    return supportedVideoExtensions.contains(ext);
+  }
+
+  static bool isImageFile(String path) {
+    final ext = path.split('.').last.toLowerCase();
+    return supportedImageExtensions.contains(ext);
+  }
+
+  static bool isAudioFile(String path) {
+    final ext = path.split('.').last.toLowerCase();
+    return supportedAudioExtensions.contains(ext);
+  }
 }

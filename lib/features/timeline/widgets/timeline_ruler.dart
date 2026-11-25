@@ -6,30 +6,48 @@ class TimelineRuler extends StatelessWidget {
   final int totalDurationMs;
   final double pixelsPerSecond;
   final ValueChanged<int> onSeek;
+  final ValueChanged<int>? onScrub;
+  final VoidCallback? onScrubEnd;
 
   const TimelineRuler({
     super.key,
     required this.totalDurationMs,
     required this.pixelsPerSecond,
     required this.onSeek,
+    this.onScrub,
+    this.onScrubEnd,
   });
+
+  void _seekToPosition(double localDx, {bool isScrub = false}) {
+    final maxSec = totalDurationMs > 0 ? (totalDurationMs / 1000.0) : 3600.0;
+    final sec = (localDx / pixelsPerSecond).clamp(0.0, maxSec);
+    final ms = (sec * 1000).round();
+    if (isScrub && onScrub != null) {
+      onScrub!(ms);
+    } else {
+      onSeek(ms);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final totalSeconds = (totalDurationMs / 1000).ceil().clamp(10, 3600);
     final totalWidth = totalSeconds * pixelsPerSecond;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (details) {
-        final sec = details.localPosition.dx / pixelsPerSecond;
-        onSeek((sec * 1000).round());
-      },
-      child: CustomPaint(
-        size: Size(totalWidth, 24),
-        painter: _RulerPainter(
-          totalSeconds: totalSeconds,
-          pixelsPerSecond: pixelsPerSecond,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (details) => _seekToPosition(details.localPosition.dx),
+        onHorizontalDragStart: (details) => _seekToPosition(details.localPosition.dx, isScrub: true),
+        onHorizontalDragUpdate: (details) => _seekToPosition(details.localPosition.dx, isScrub: true),
+        onHorizontalDragEnd: (_) => onScrubEnd?.call(),
+        child: CustomPaint(
+          size: Size(totalWidth, 24),
+          painter: _RulerPainter(
+            totalSeconds: totalSeconds,
+            pixelsPerSecond: pixelsPerSecond,
+          ),
         ),
       ),
     );
@@ -55,14 +73,8 @@ class _RulerPainter extends CustomPainter {
       ..color = AppColors.textSecondary
       ..strokeWidth = 1.0;
 
-    // Bottom baseline
-    canvas.drawLine(
-      Offset(0, size.height),
-      Offset(size.width, size.height),
-      linePaint,
-    );
+    canvas.drawLine(Offset(0, size.height), Offset(size.width, size.height), linePaint);
 
-    // Determine interval for text labels based on zoom
     final stepSeconds = (pixelsPerSecond > 60)
         ? 1
         : (pixelsPerSecond > 30)
@@ -80,15 +92,11 @@ class _RulerPainter extends CustomPainter {
       final isMajor = (sec % stepSeconds == 0);
 
       if (isMajor) {
-        // Major tick
         canvas.drawLine(Offset(x, size.height - 10), Offset(x, size.height), majorLinePaint);
-
-        // Time label
         final textSpan = TextSpan(text: TimeParser.formatStandard(sec * 1000), style: textStyle);
         final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr)..layout();
         tp.paint(canvas, Offset(x + 2, 2));
       } else if (pixelsPerSecond > 20) {
-        // Minor tick
         canvas.drawLine(Offset(x, size.height - 4), Offset(x, size.height), linePaint);
       }
     }

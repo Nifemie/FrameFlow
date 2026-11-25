@@ -29,21 +29,18 @@ class CsvService {
       final trimmed = line.trim();
       if (trimmed.isEmpty) continue;
 
-      // If line contains commas, check if it's CSV
       if (trimmed.contains(',')) {
         final cols = trimmed.split(',');
-        // Skip CSV header line if present
         if (cols[0].toLowerCase().contains('index') ||
             cols[0].toLowerCase().contains('file') ||
             cols[0].toLowerCase().contains('name')) {
           continue;
         }
 
-        // Try finding the column that parses as a timestamp
         String? foundStamp;
         for (final col in cols) {
           final cleanCol = col.replaceAll('"', '').trim();
-          if (TimeParser.parseToMs(cleanCol) != null) {
+          if (isValidTimestampOrRange(cleanCol)) {
             foundStamp = cleanCol;
           }
         }
@@ -51,13 +48,40 @@ class CsvService {
           results.add(foundStamp);
         }
       } else {
-        // Plain timestamp per line
-        if (TimeParser.parseToMs(trimmed) != null) {
+        if (isValidTimestampOrRange(trimmed)) {
           results.add(trimmed);
         }
       }
     }
 
     return results;
+  }
+
+  /// Checks if a string is a valid single timestamp or a start-end range.
+  static bool isValidTimestampOrRange(String text) {
+    final rangeParts = splitRange(text);
+    if (rangeParts != null) {
+      final s = TimeParser.parseToMs(rangeParts[0]);
+      final e = TimeParser.parseToMs(rangeParts[1]);
+      return s != null && e != null && e > s;
+    }
+    return TimeParser.parseToMs(text.trim()) != null;
+  }
+
+  /// Splits a range string like "00:10 - 00:15" or "00:10 to 00:15".
+  static List<String>? splitRange(String text) {
+    for (final sep in [' - ', ' – ', ' — ', ' to ', ' -> ']) {
+      if (text.contains(sep)) {
+        final parts = text.split(sep);
+        if (parts.length == 2) return [parts[0].trim(), parts[1].trim()];
+      }
+    }
+    if (text.contains('-')) {
+      final parts = text.split('-');
+      if (parts.length == 2 && parts[0].contains(':') && parts[1].contains(':')) {
+        return [parts[0].trim(), parts[1].trim()];
+      }
+    }
+    return null;
   }
 }

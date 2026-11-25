@@ -89,16 +89,17 @@ class AudioDropCard extends ConsumerWidget {
       margin: const EdgeInsets.all(8),
       child: OutlinedButton.icon(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          side: const BorderSide(color: AppColors.surfaceBorder, style: BorderStyle.solid),
+          backgroundColor: AppColors.accentOrange.withValues(alpha: 0.08),
+          foregroundColor: Colors.white,
+          side: BorderSide(color: AppColors.accentOrange.withValues(alpha: 0.6), width: 1.2),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
         onPressed: () => _pickAudio(context, ref),
-        icon: const Icon(Icons.audio_file_outlined, color: AppColors.waveform, size: 18),
+        icon: const Icon(Icons.audio_file_outlined, color: AppColors.accentOrange, size: 18),
         label: const Text(
           'Import Voice-Over Audio',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
     );

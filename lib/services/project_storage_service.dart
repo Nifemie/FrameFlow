@@ -2,8 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/asset_animation.dart';
+import '../models/asset_transform.dart';
+import '../models/audio_clip_item.dart';
 import '../models/image_item.dart';
 import '../models/project.dart';
+import '../models/text_overlay_item.dart';
 import '../models/voice_over.dart';
 import 'timing_engine.dart';
 
@@ -15,6 +19,7 @@ class ProjectStorageService {
       'name': project.name,
       'aspectRatio': project.aspectRatio.name,
       'resolution': project.resolution.name,
+      'timingMode': project.timingMode.name,
       'fps': project.fps,
       'scriptText': project.scriptText,
       'voiceOver': project.voiceOver == null
@@ -24,14 +29,26 @@ class ProjectStorageService {
               'fileName': project.voiceOver!.fileName,
               'durationMs': project.voiceOver!.durationMs,
             },
-      'images': project.images.map((img) => {
-        'id': img.id,
-        'filePath': img.filePath,
-        'displayName': img.displayName,
-        'orderIndex': img.orderIndex,
-        'userEndTimestampInput': img.userEndTimestampInput,
-        'fitMode': img.fitMode.name,
+      'audioClips': project.audioClips.map((c) => {
+        'id': c.id,
+        'filePath': c.filePath,
+        'fileName': c.fileName,
+        'startTimelineMs': c.startTimelineMs,
+        'durationMs': c.durationMs,
+        'volume': c.volume,
+        'orderIndex': c.orderIndex,
       }).toList(),
+      'images': project.images.map((img) => {
+        'id': img.id, 'filePath': img.filePath, 'displayName': img.displayName,
+        'orderIndex': img.orderIndex, 'userStartTimestampInput': img.userStartTimestampInput,
+        'userEndTimestampInput': img.userEndTimestampInput, 'fitMode': img.fitMode.name,
+        'backgroundColorValue': img.backgroundColorValue, 'trackId': img.trackId,
+        'sourceStartOffsetMs': img.sourceStartOffsetMs,
+        'sourceDurationMs': img.sourceDurationMs,
+        'transform': img.transform.toJson(),
+        'animations': img.animations.map((a) => a.toJson()).toList(),
+      }).toList(),
+      'textOverlays': project.textOverlays.map((t) => t.toJson()).toList(),
     };
   }
 
@@ -44,6 +61,10 @@ class ProjectStorageService {
     final res = VideoResolution.values.firstWhere(
       (r) => r.name == map['resolution'],
       orElse: () => VideoResolution.res1080p,
+    );
+    final timingMode = TimingMode.values.firstWhere(
+      (t) => t.name == map['timingMode'],
+      orElse: () => TimingMode.automatic,
     );
 
     VoiceOver? voiceOver;
@@ -63,13 +84,27 @@ class ProjectStorageService {
         orElse: () => ImageFitMode.fit,
       );
 
+      final anims = (imgMap['animations'] as List<dynamic>? ?? [])
+          .map((a) => AssetAnimation.fromJson(a as Map<String, dynamic>))
+          .toList();
+      final transform = imgMap['transform'] != null
+          ? AssetTransform.fromJson(imgMap['transform'] as Map<String, dynamic>)
+          : AssetTransform.identity;
+
       return ImageItem(
         id: imgMap['id'] as String,
         filePath: imgMap['filePath'] as String,
         displayName: imgMap['displayName'] as String,
         orderIndex: imgMap['orderIndex'] as int,
+        userStartTimestampInput: imgMap['userStartTimestampInput'] as String?,
         userEndTimestampInput: imgMap['userEndTimestampInput'] as String?,
         fitMode: fit,
+        backgroundColorValue: imgMap['backgroundColorValue'] as int?,
+        trackId: imgMap['trackId'] as String? ?? 'track_v1',
+        sourceStartOffsetMs: imgMap['sourceStartOffsetMs'] as int? ?? 0,
+        sourceDurationMs: imgMap['sourceDurationMs'] as int?,
+        transform: transform,
+        animations: anims,
       );
     }).toList();
 
@@ -78,12 +113,32 @@ class ProjectStorageService {
       voiceOverDurationMs: voiceOver?.durationMs,
     );
 
+    final audioClips = (map['audioClips'] as List<dynamic>? ?? []).map((c) {
+      final cm = c as Map<String, dynamic>;
+      return AudioClipItem(
+        id: cm['id'] as String,
+        filePath: cm['filePath'] as String,
+        fileName: cm['fileName'] as String,
+        startTimelineMs: cm['startTimelineMs'] as int,
+        durationMs: cm['durationMs'] as int,
+        volume: (cm['volume'] as num?)?.toDouble() ?? 1.0,
+        orderIndex: cm['orderIndex'] as int,
+      );
+    }).toList();
+
+    final textOverlays = (map['textOverlays'] as List<dynamic>? ?? []).map((t) {
+      return TextOverlayItem.fromJson(t as Map<String, dynamic>);
+    }).toList();
+
     return Project(
       id: map['id'] as String,
       name: map['name'] as String? ?? 'Untitled Project',
       images: calculated,
       voiceOver: voiceOver,
+      audioClips: audioClips,
+      textOverlays: textOverlays,
       scriptText: map['scriptText'] as String?,
+      timingMode: timingMode,
       aspectRatio: ratio,
       resolution: res,
       fps: map['fps'] as int? ?? 30,

@@ -1,175 +1,234 @@
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/natural_sort.dart';
+import '../../../models/image_item.dart';
+import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
+import 'folder_import_dialog.dart';
 import 'image_card.dart';
 
-class ImageListView extends ConsumerWidget {
+class ImageListView extends ConsumerStatefulWidget {
   const ImageListView({super.key});
 
-  Future<void> _pickImages(WidgetRef ref) async {
+  @override
+  ConsumerState<ImageListView> createState() => _ImageListViewState();
+}
+
+class _ImageListViewState extends ConsumerState<ImageListView> {
+  String _targetTrack = 'track_v1';
+
+  Future<void> _pickImages() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: AppConstants.supportedImageExtensions,
+      allowedExtensions: [
+        ...AppConstants.supportedVideoExtensions,
+        ...AppConstants.supportedImageExtensions,
+      ],
       allowMultiple: true,
     );
-
-    if (result != null) {
-      final paths = result.paths.whereType<String>().toList();
-      paths.sort((a, b) => NaturalSort.compare(p.basename(a), p.basename(b)));
-      _addPaths(ref, paths);
-    }
+    if (result != null) _addPaths(result.paths.whereType<String>().toList());
   }
 
-  Future<void> _pickFolder(WidgetRef ref) async {
+  Future<void> _pickFolder() async {
     final folderPath = await FilePicker.platform.getDirectoryPath();
-    if (folderPath == null) return;
-
-    final dir = Directory(folderPath);
-    if (!await dir.exists()) return;
-
-    final imageFiles = <String>[];
-    await for (final entity in dir.list(followLinks: false)) {
-      if (entity is File) {
-        final ext = p.extension(entity.path).toLowerCase().replaceAll('.', '');
-        if (AppConstants.supportedImageExtensions.contains(ext)) {
-          imageFiles.add(entity.path);
-        }
-      }
-    }
-
-    imageFiles.sort((a, b) => NaturalSort.compare(p.basename(a), p.basename(b)));
-    _addPaths(ref, imageFiles);
+    if (folderPath == null || !mounted) return;
+    showDialog(context: context, builder: (_) => FolderImportDialog(directoryPath: folderPath, onImportConfirmed: (paths, stamps) => _addPaths(paths, stamps)));
   }
 
-  void _addPaths(WidgetRef ref, List<String> paths) {
+  void _addPaths(List<String> paths, [List<String>? timestamps]) {
     if (paths.isEmpty) return;
-    ref.read(projectProvider.notifier).addImages(paths);
+    ref.read(projectProvider.notifier).addImages(paths, trackId: _targetTrack);
+    if (timestamps != null && timestamps.isNotEmpty) ref.read(projectProvider.notifier).applyBulkTimestamps(timestamps);
     if (ref.read(selectedImageIdProvider) == null) {
       final images = ref.read(projectProvider).images;
-      if (images.isNotEmpty) {
-        ref.read(selectedImageIdProvider.notifier).state = images.first.id;
-      }
+      if (images.isNotEmpty) ref.read(selectedImageIdProvider.notifier).state = images.first.id;
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final images = ref.watch(projectProvider.select((p) => p.images));
+  Widget build(BuildContext context) {
+    final project = ref.watch(projectProvider);
+    final allImages = project.images;
     final selectedId = ref.watch(selectedImageIdProvider);
+    final videoTracks = project.effectiveTracks.where((t) => t.isVideoOrBg).toList();
+    final displayedImages = _targetTrack == 'all' ? allImages : allImages.where((i) => i.trackId == _targetTrack).toList();
+
+    Color btnColor = _targetTrack == 'track_bg' ? Colors.purpleAccent : AppColors.accentOrange;
+    final activeTrack = videoTracks.where((t) => t.id == _targetTrack).firstOrNull;
+    if (activeTrack != null && activeTrack.type == TrackType.overlayVideo) btnColor = Colors.cyanAccent;
 
     return Column(
       children: [
-        // Action header with Add, Folder, and Bulk buttons
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Images (${images.length})',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
+              Text('Clips (${allImages.length})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.playlist_add_check, size: 18, color: AppColors.clipBlueLight),
-                    tooltip: 'Bulk paste timestamps or CSV',
-                    splashRadius: 16,
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (_) => const BulkTimestampDialog(),
-                      );
-                    },
+                    icon: const Icon(Icons.palette_outlined, size: 17, color: Colors.purpleAccent),
+                    tooltip: 'Add Color Matte to ${_targetTrack == "track_bg" ? "Underlay Track" : "Selected Track"}', splashRadius: 16,
+                    onPressed: () => ref.read(projectProvider.notifier).addColorBackground(trackId: _targetTrack == 'all' ? 'track_v1' : _targetTrack),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.folder_open, size: 18, color: AppColors.clipBlueLight),
-                    tooltip: 'Import folder of images',
-                    splashRadius: 16,
-                    onPressed: () => _pickFolder(ref),
+                    icon: const Icon(Icons.playlist_add_check, size: 17, color: AppColors.accentOrange),
+                    tooltip: 'Bulk paste timestamps or CSV', splashRadius: 16,
+                    onPressed: () => showDialog(context: context, builder: (_) => const BulkTimestampDialog()),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.folder_open, size: 17, color: AppColors.accentOrange),
+                    tooltip: 'Import folder of images', splashRadius: 16,
+                    onPressed: _pickFolder,
                   ),
                   const SizedBox(width: 4),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.clipBlue,
+                      backgroundColor: btnColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                       textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                     ),
-                    onPressed: () => _pickImages(ref),
-                    icon: const Icon(Icons.add_photo_alternate, size: 14),
-                    label: const Text('Add'),
+                    onPressed: _pickImages,
+                    icon: const Icon(Icons.add_photo_alternate, size: 13),
+                    label: Text(activeTrack != null && activeTrack.type == TrackType.overlayVideo ? 'Add (V2)' : 'Add'),
                   ),
                 ],
               ),
             ],
           ),
         ),
-
-        // List or Empty Placeholder
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final tr in videoTracks) ...[
+                  _buildFilterChip(
+                    tr.id,
+                    '${tr.name.split(' ').first} (${allImages.where((i) => i.trackId == tr.id).length})',
+                    tr.type == TrackType.overlayVideo ? Colors.cyanAccent : (tr.type == TrackType.backgroundUnderlay ? Colors.purpleAccent : AppColors.accentOrange),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                _buildFilterChip('all', 'All (${allImages.length})', AppColors.textMuted),
+              ],
+            ),
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.surfaceBorder),
         Expanded(
-          child: images.isEmpty
+          child: displayedImages.isEmpty
               ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.photo_library_outlined,
-                          size: 36, color: AppColors.textMuted.withValues(alpha: 0.6)),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'No images yet',
-                        style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Click Add or Folder icon above',
-                        style: TextStyle(fontSize: 10, color: AppColors.textMuted),
-                      ),
-                    ],
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.photo_library_outlined, size: 28, color: AppColors.textMuted.withValues(alpha: 0.5)),
+                        const SizedBox(height: 6),
+                        Text(_targetTrack == 'track_bg' ? 'No Underlay Clips' : 'No Clips in Selected Track', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: btnColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          ),
+                          onPressed: _pickImages, icon: const Icon(Icons.add_photo_alternate, size: 12),
+                          label: const Text('Add Images to Track', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : ReorderableListView.builder(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  itemCount: images.length,
-                  onReorder: (oldIdx, newIdx) {
-                    ref.read(projectProvider.notifier).reorderImages(oldIdx, newIdx);
+                  buildDefaultDragHandles: false,
+                  padding: const EdgeInsets.all(8),
+                  itemCount: displayedImages.length,
+                  onReorder: (oldIndex, newIndex) {
+                    final item = displayedImages[oldIndex];
+                    final rawOld = allImages.indexOf(item);
+                    final targetItem = newIndex < displayedImages.length ? displayedImages[newIndex] : displayedImages.last;
+                    final rawNew = allImages.indexOf(targetItem);
+                    if (rawOld >= 0 && rawNew >= 0) ref.read(projectProvider.notifier).reorderImages(rawOld, rawNew);
                   },
                   itemBuilder: (context, index) {
-                    final item = images[index];
-                    return ImageCard(
+                    final item = displayedImages[index];
+                    return Draggable<ImageItem>(
                       key: ValueKey(item.id),
-                      item: item,
-                      isSelected: item.id == selectedId,
-                      onSelect: () {
-                        ref.read(selectedImageIdProvider.notifier).state = item.id;
-                        ref.read(playheadPositionProvider.notifier).state = item.startMs;
-                      },
-                      onDelete: () {
-                        ref.read(projectProvider.notifier).removeImage(item.id);
-                        if (selectedId == item.id) {
-                          ref.read(selectedImageIdProvider.notifier).state = null;
-                        }
-                      },
+                      data: item,
+                      feedback: Material(
+                        color: Colors.transparent,
+                        child: Opacity(
+                          opacity: 0.85,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: AppColors.accentOrange, width: 1.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.accentOrange.withValues(alpha: 0.35),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(item.isVideo ? Icons.videocam_rounded : Icons.image_rounded, size: 14, color: AppColors.accentOrange),
+                                const SizedBox(width: 6),
+                                Text(item.displayName, style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      child: ImageCard(
+                        item: item,
+                        isSelected: item.id == selectedId,
+                        onTap: () {
+                          ref.read(selectedImageIdProvider.notifier).state = item.id;
+                          ref.read(selectedTextOverlayIdProvider.notifier).state = null;
+                        },
+                        onRemove: () {
+                          ref.read(projectProvider.notifier).removeImage(item.id);
+                          if (selectedId == item.id) ref.read(selectedImageIdProvider.notifier).state = null;
+                        },
+                      ),
                     );
                   },
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFilterChip(String trackKey, String label, Color accentColor) {
+    final isSelected = _targetTrack == trackKey;
+    return InkWell(
+      onTap: () => setState(() => _targetTrack = trackKey),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: isSelected ? accentColor.withValues(alpha: 0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? accentColor : AppColors.surfaceBorder, width: isSelected ? 1.0 : 0.6),
+        ),
+        child: Text(label, style: TextStyle(fontSize: 9.5, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Colors.white : AppColors.textMuted)),
+      ),
     );
   }
 }

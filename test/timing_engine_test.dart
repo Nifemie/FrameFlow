@@ -170,7 +170,7 @@ void main() {
       expect(TimingEngine.findActiveImageIndex(images, 8999), equals(1));
       expect(TimingEngine.findActiveImageIndex(images, 9000), equals(2));
       expect(TimingEngine.findActiveImageIndex(images, 14000), equals(2));
-      expect(TimingEngine.findActiveImageIndex(images, 20000), equals(2)); // Caps at last
+      expect(TimingEngine.findActiveImageIndex(images, 20000), equals(-1)); // Past end renders blank gap
     });
 
     test('Preserves monotonic sequence when invalid/premature timestamp is entered', () {

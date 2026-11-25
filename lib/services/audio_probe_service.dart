@@ -66,6 +66,27 @@ class AudioProbeService {
     return null;
   }
 
+  /// Checks whether a media/video file contains an audio stream.
+  static Future<bool> hasAudioStream(String filePath) async {
+    final ffprobePath = findFFprobe();
+    if (ffprobePath != null) {
+      try {
+        final result = await Process.run(ffprobePath, [
+          '-v', 'error',
+          '-select_streams', 'a',
+          '-show_entries', 'stream=codec_type',
+          '-of', 'default=noprint_wrappers=1:nokey=1',
+          filePath,
+        ]);
+        if (result.exitCode == 0) {
+          final out = (result.stdout as String).trim();
+          return out.isNotEmpty;
+        }
+      } catch (_) {}
+    }
+    return false;
+  }
+
   /// Reliably extracts duration in milliseconds from any audio file.
   static Future<int> getAudioDurationMs(String filePath) async {
     // 1. Try with ffprobe (fastest & 100% reliable)

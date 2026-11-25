@@ -1,154 +1,380 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
+import '../core/utils/time_parser.dart';
+import '../features/timestamps/services/csv_service.dart';
+import '../models/asset_animation.dart';
+import '../models/asset_transform.dart';
+import '../models/audio_clip_item.dart';
 import '../models/image_item.dart';
 import '../models/project.dart';
+import '../models/text_overlay_item.dart';
+import '../models/timeline_track_item.dart';
 import '../models/voice_over.dart';
+import '../services/alignment_service.dart';
+import '../services/asset_animation_service.dart';
+import '../services/animation_randomisation_engine.dart';
+import '../services/audio_editing_service.dart';
+import '../services/clip_editing_service.dart';
+import '../services/text_editing_service.dart';
+import '../services/timeline_arrangement_service.dart';
 import '../services/timing_engine.dart';
+import '../services/undo_redo_manager.dart';
+import '../services/video_metadata_service.dart';
 
 class ProjectNotifier extends StateNotifier<Project> {
   static const _uuid = Uuid();
+  final UndoRedoManager _undoRedo = UndoRedoManager();
 
-  ProjectNotifier()
-      : super(Project(
-          id: _uuid.v4(),
-          name: 'Untitled Project',
-        ));
+  ProjectNotifier() : super(Project(id: _uuid.v4(), name: 'Untitled Project'));
 
-  void setProjectName(String name) {
-    state = state.copyWith(name: name);
+  bool get canUndo => _undoRedo.canUndo;
+  bool get canRedo => _undoRedo.canRedo;
+  bool undo() { final p = _undoRedo.undo(state); if (p != null) { state = p; return true; } return false; }
+  bool redo() { final n = _undoRedo.redo(state); if (n != null) { state = n; return true; } return false; }
+  void setProjectName(String name) { _undoRedo.recordSnapshot(state); state = state.copyWith(name: name); }
+
+  void addImages(List<String> paths, {String trackId = 'track_v1'}) {
+    if (paths.isEmpty) return;
+    _undoRedo.recordSnapshot(state);
+    final items = paths.map((path) => ImageItem(id: _uuid.v4(), filePath: path, displayName: p.basename(path), orderIndex: state.images.length, trackId: trackId)).toList();
+    state = state.copyWith(images: TimingEngine.calculateSequence(images: [...state.images, ...items], voiceOverDurationMs: state.voiceOver?.durationMs));
+
+    for (final item in items) {
+      if (item.isVideo) {
+        VideoMetadataService.resolveDuration(item.filePath).then((durMs) {
+          if (durMs > 0) {
+            final current = state.images.where((img) => img.id == item.id).firstOrNull;
+            if (current != null) {
+              final newEnd = current.startMs + durMs;
+              updateTimestamp(item.id, (newEnd / 1000).toStringAsFixed(2));
+            }
+          }
+        });
+        VideoMetadataService.getThumbnailPath(item.filePath);
+        VideoMetadataService.getAudioTrackPath(item.filePath);
+      }
+    }
   }
 
-  void addImages(List<String> filePaths) {
-    if (filePaths.isEmpty) return;
-
-    final newItems = filePaths.map((path) {
-      final fileName = p.basename(path);
-      return ImageItem(
-        id: _uuid.v4(),
-        filePath: path,
-        displayName: fileName,
-        orderIndex: state.images.length,
-      );
-    }).toList();
-
-    final combined = [...state.images, ...newItems];
-    final calculated = TimingEngine.calculateSequence(
-      images: combined,
-      voiceOverDurationMs: state.voiceOver?.durationMs,
+  void addColorBackground({Color color = const Color(0xFF1E293B), int durationMs = 3000, int? targetIndex, String trackId = 'track_v1'}) {
+    _undoRedo.recordSnapshot(state);
+    final idx = (targetIndex ?? state.images.length).clamp(0, state.images.length);
+    final item = ImageItem(
+      id: _uuid.v4(), filePath: 'color_background', displayName: 'Color BG',
+      orderIndex: idx, durationMs: durationMs, backgroundColorValue: color.toARGB32(), trackId: trackId,
     );
-
-    state = state.copyWith(images: calculated);
+    final updated = List<ImageItem>.from(state.images)..insert(idx, item);
+    for (int i = 0; i < updated.length; i++) { updated[i] = updated[i].copyWith(orderIndex: i); }
+    state = state.copyWith(images: TimingEngine.calculateSequence(images: updated, voiceOverDurationMs: state.voiceOver?.durationMs));
   }
 
-  void removeImage(String id) {
-    final filtered = state.images.where((img) => img.id != id).toList();
-    final calculated = TimingEngine.calculateSequence(
-      images: filtered,
-      voiceOverDurationMs: state.voiceOver?.durationMs,
+  void updateImageColor(String imageId, Color color, {bool recordUndo = true}) {
+    if (recordUndo) _undoRedo.recordSnapshot(state);
+    final updated = state.images.map((img) => img.id == imageId ? img.copyWith(backgroundColorValue: color.toARGB32()) : img).toList();
+    state = state.copyWith(images: updated);
+  }
+
+  void insertImagesAt(int targetIndex, List<String> paths, {String trackId = 'track_v1'}) {
+    if (paths.isEmpty) return;
+    _undoRedo.recordSnapshot(state);
+    final idx = targetIndex.clamp(0, state.images.length);
+    final items = paths.map((path) => ImageItem(id: _uuid.v4(), filePath: path, displayName: p.basename(path), orderIndex: idx, trackId: trackId)).toList();
+    final updated = List<ImageItem>.from(state.images)..insertAll(idx, items);
+    for (int i = 0; i < updated.length; i++) { updated[i] = updated[i].copyWith(orderIndex: i); }
+    state = state.copyWith(images: TimingEngine.calculateSequence(images: updated, voiceOverDurationMs: state.voiceOver?.durationMs));
+  }
+
+  void trimClipEnd(String imageId, int newEndMs, {bool recordUndo = true}) {
+    if (recordUndo) _undoRedo.recordSnapshot(state);
+    state = state.copyWith(images: ClipEditingService.rippleTrimClipEnd(images: state.images, clipId: imageId, newEndMs: newEndMs, voiceOverDurationMs: state.voiceOver?.durationMs));
+  }
+
+  void snapClipToAudio(String imageId) { if (state.voiceOver != null) trimClipEnd(imageId, state.voiceOver!.durationMs); }
+  void removeImage(String id, {bool preserveGap = false}) {
+    if (preserveGap) {
+      removeClipsPreservingGaps({id});
+      return;
+    }
+    _undoRedo.recordSnapshot(state);
+    state = state.copyWith(images: TimingEngine.calculateSequence(images: state.images.where((img) => img.id != id).toList(), voiceOverDurationMs: state.voiceOver?.durationMs));
+  }
+
+  void removeClipsPreservingGaps(Set<String> clipIds) {
+    if (clipIds.isEmpty) return;
+    _undoRedo.recordSnapshot(state);
+    state = state.copyWith(
+      images: ClipEditingService.deleteClipPreservingGaps(
+        images: state.images,
+        clipIdsToDelete: clipIds,
+        voiceOverDurationMs: state.voiceOver?.durationMs,
+      ),
     );
-    state = state.copyWith(images: calculated);
   }
 
+  void applyAlignment({required Set<String> targetIds, required AlignmentType type}) {
+    if (targetIds.isEmpty) return;
+    _undoRedo.recordSnapshot(state);
+    state = state.copyWith(
+      images: AlignmentService.alignMultiple(
+        allImages: state.images,
+        targetIds: targetIds,
+        type: type,
+      ),
+    );
+  }
   void reorderImages(int oldIndex, int newIndex) {
+    _undoRedo.recordSnapshot(state);
     final list = List<ImageItem>.from(state.images);
-    if (newIndex > oldIndex) newIndex -= 1;
     final item = list.removeAt(oldIndex);
-    list.insert(newIndex, item);
-
-    final calculated = TimingEngine.calculateSequence(
-      images: list,
-      voiceOverDurationMs: state.voiceOver?.durationMs,
-    );
-    state = state.copyWith(images: calculated);
+    list.insert(newIndex > oldIndex ? newIndex - 1 : newIndex, item);
+    state = state.copyWith(images: TimingEngine.calculateSequence(images: list, voiceOverDurationMs: state.voiceOver?.durationMs));
   }
 
-  void updateTimestamp(String imageId, String? timestampInput) {
-    final updated = TimingEngine.updateImageTimestamp(
-      images: state.images,
-      imageId: imageId,
-      newTimestampInput: timestampInput,
-      voiceOverDurationMs: state.voiceOver?.durationMs,
+  void moveImageClipStart(String clipId, int newStartMs) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimelineArrangementService.moveClipStart(images: state.images, clipId: clipId, newStartMs: newStartMs, voiceOverDurationMs: state.voiceOver?.durationMs)); }
+  void swapImageClips(String idA, String idB) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimelineArrangementService.swapClips(images: state.images, idA: idA, idB: idB, voiceOverDurationMs: state.voiceOver?.durationMs)); }
+  void reorderAndOccupy(String draggedId, String targetId, {required bool insertBefore}) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimelineArrangementService.reorderAndOccupy(images: state.images, draggedId: draggedId, targetId: targetId, insertBefore: insertBefore, voiceOverDurationMs: state.voiceOver?.durationMs)); }
+  void fillBlankGap({required int startMs, required int endMs, required String trackId, required bool isColorBg, String? imagePath, Color? color, String? existingClipId}) {
+    _undoRedo.recordSnapshot(state);
+    if (existingClipId != null) {
+      state = state.copyWith(images: TimelineArrangementService.fillGapWithClip(images: state.images, clipId: existingClipId, startMs: startMs, targetTrackId: trackId, voiceOverDurationMs: state.voiceOver?.durationMs));
+    } else {
+      state = state.copyWith(images: TimelineArrangementService.fillGap(images: state.images, startMs: startMs, endMs: endMs, trackId: trackId, isColorBg: isColorBg, imagePath: imagePath, color: color, voiceOverDurationMs: state.voiceOver?.durationMs));
+    }
+  }
+  void insertAssetAfterClip({required ImageItem afterClip, required bool isColorBg, String? imagePath, Color? color}) {
+    _undoRedo.recordSnapshot(state);
+    state = state.copyWith(
+      images: TimelineArrangementService.insertAfterClip(
+        images: state.images,
+        afterClip: afterClip,
+        isColorBg: isColorBg,
+        imagePath: imagePath,
+        color: color,
+        voiceOverDurationMs: state.voiceOver?.durationMs,
+      ),
     );
-    state = state.copyWith(images: updated);
+    if (imagePath != null) {
+      final matches = state.images.where((i) => i.filePath == imagePath).toList();
+      if (matches.isNotEmpty && matches.last.isVideo) {
+        final inserted = matches.last;
+        VideoMetadataService.resolveDuration(imagePath).then((durMs) {
+          if (durMs > 0) {
+            final current = state.images.where((img) => img.id == inserted.id).firstOrNull;
+            if (current != null) {
+              final newEnd = current.startMs + durMs;
+              updateTimestamp(inserted.id, (newEnd / 1000).toStringAsFixed(2));
+            }
+          }
+        });
+        VideoMetadataService.getThumbnailPath(imagePath);
+        VideoMetadataService.getAudioTrackPath(imagePath);
+      }
+    }
   }
 
-  void applyBulkTimestamps(List<String> timestampList) {
-    final updated = TimingEngine.applyBulkTimestamps(
-      images: state.images,
-      timestampList: timestampList,
-      voiceOverDurationMs: state.voiceOver?.durationMs,
-    );
-    state = state.copyWith(images: updated);
-  }
+  void updateTimestamp(String imageId, String? timestampInput) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimingEngine.updateImageTimestamp(images: state.images, imageId: imageId, newTimestampInput: timestampInput, voiceOverDurationMs: state.voiceOver?.durationMs)); }
+  void updateStartTimestamp(String imageId, String? startInput) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimingEngine.updateImageStartTimestamp(images: state.images, imageId: imageId, newStartInput: startInput, voiceOverDurationMs: state.voiceOver?.durationMs)); }
+  void applyBulkTimestamps(List<String> timestampList, {String? trackId}) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimingEngine.applyBulkTimestamps(images: state.images, timestampList: timestampList, voiceOverDurationMs: state.voiceOver?.durationMs, trackId: trackId)); }
 
   String? stampCurrentCutPoint(int currentMs) {
     if (state.images.isEmpty) return null;
-    final activeIdx = TimingEngine.findActiveImageIndex(state.images, currentMs);
-    if (activeIdx < 0 || activeIdx >= state.images.length) return null;
-
-    final targetItem = state.images[activeIdx];
-    // Don't cut if playhead is exactly at startMs
-    if (currentMs <= targetItem.startMs) return null;
-
-    final timeStr = TimeParser.formatDetailed(currentMs);
-    updateTimestamp(targetItem.id, timeStr);
-    return targetItem.displayName;
+    final idx = TimingEngine.findActiveImageIndex(state.images, currentMs);
+    if (idx < 0 || idx >= state.images.length || currentMs <= state.images[idx].startMs) return null;
+    updateTimestamp(state.images[idx].id, (currentMs / 1000).toStringAsFixed(2));
+    return state.images[idx].displayName;
   }
 
-  void updateFitMode(String imageId, ImageFitMode mode) {
-    final updated = state.images.map((img) {
-      if (img.id == imageId) return img.copyWith(fitMode: mode);
-      return img;
-    }).toList();
+  bool splitAtPlayhead(int playheadMs) {
+    final res = ClipEditingService.splitClipAt(images: state.images, playheadMs: playheadMs, voiceOverDurationMs: state.voiceOver?.durationMs);
+    if (res == null) return false;
+    _undoRedo.recordSnapshot(state);
+    state = state.copyWith(images: res);
+    return true;
+  }
+
+  void duplicateImage(String imageId) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: ClipEditingService.duplicateClip(images: state.images, clipId: imageId, voiceOverDurationMs: state.voiceOver?.durationMs)); }
+  void updateFitMode(String imageId, ImageFitMode mode) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: state.images.map((img) => img.id == imageId ? img.copyWith(fitMode: mode) : img).toList()); }
+
+  void setVoiceOver(VoiceOver voiceOver) {
+    _undoRedo.recordSnapshot(state);
+    final clip = AudioClipItem(id: _uuid.v4(), filePath: voiceOver.filePath, fileName: voiceOver.fileName, startTimelineMs: 0, durationMs: voiceOver.durationMs, orderIndex: 0);
+    final snap = state.timingMode == TimingMode.automatic;
+    state = state.copyWith(voiceOver: voiceOver, audioClips: [clip], images: TimingEngine.calculateSequence(images: state.images, voiceOverDurationMs: voiceOver.durationMs, snapFinalImageToAudio: snap));
+  }
+
+  void addAudioClip(String filePath, String fileName, int durationMs, {int? customStartMs}) {
+    _undoRedo.recordSnapshot(state);
+    var cur = state.audioClips;
+    if (cur.isEmpty && state.voiceOver != null) {
+      cur = [AudioClipItem(id: _uuid.v4(), filePath: state.voiceOver!.filePath, fileName: state.voiceOver!.fileName, startTimelineMs: 0, durationMs: state.voiceOver!.durationMs, orderIndex: 0)];
+    }
+    final updated = AudioEditingService.appendAudioClip(existingClips: cur, filePath: filePath, fileName: fileName, durationMs: durationMs, customStartMs: customStartMs);
+    state = state.copyWith(audioClips: updated, voiceOver: updated.isNotEmpty ? VoiceOver(filePath: updated.first.filePath, fileName: updated.first.fileName, durationMs: updated.fold<int>(0, (s, c) => s + c.durationMs)) : null);
+  }
+
+  void moveAudioClipStart(String clipId, int newStartMs, {bool recordUndo = true}) {
+    if (recordUndo) _undoRedo.recordSnapshot(state);
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    state = state.copyWith(audioClips: AudioEditingService.moveClipStart(clips: clips, clipId: clipId, newStartMs: newStartMs));
+  }
+
+  void applyAudioBulkTimestamps(List<String> timestampList) {
+    if (timestampList.isEmpty) return;
+    _undoRedo.recordSnapshot(state);
+    final clips = List<AudioClipItem>.from(state.effectiveAudioClips);
+    if (clips.isEmpty) return;
+
+    final updated = <AudioClipItem>[];
+    for (int i = 0; i < clips.length; i++) {
+      final clip = clips[i];
+      if (i < timestampList.length) {
+        final stampText = timestampList[i];
+        final range = CsvService.splitRange(stampText);
+        final startMs = range != null
+            ? (TimeParser.parseToMs(range[0]) ?? clip.startTimelineMs)
+            : (TimeParser.parseToMs(stampText) ?? clip.startTimelineMs);
+        updated.add(clip.copyWith(startTimelineMs: startMs));
+      } else {
+        updated.add(clip);
+      }
+    }
+
+    updated.sort((a, b) => a.startTimelineMs.compareTo(b.startTimelineMs));
+    final reindexed = <AudioClipItem>[];
+    for (int i = 0; i < updated.length; i++) {
+      reindexed.add(updated[i].copyWith(orderIndex: i));
+    }
+    state = state.copyWith(audioClips: reindexed);
+  }
+
+  void trimAudioClipEnd(String clipId, int newDurationMs, {bool recordUndo = true}) {
+    if (recordUndo) _undoRedo.recordSnapshot(state);
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    final res = AudioEditingService.trimClipEnd(clips: clips, clipId: clipId, newDurationMs: newDurationMs);
+    state = state.copyWith(audioClips: res);
+  }
+
+  void trimAudioClipStart(String clipId, int newStartTimelineMs, {bool recordUndo = true}) {
+    if (recordUndo) _undoRedo.recordSnapshot(state);
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    final res = AudioEditingService.trimClipStart(clips: clips, clipId: clipId, newStartTimelineMs: newStartTimelineMs);
+    state = state.copyWith(audioClips: res);
+  }
+
+  bool splitAudioAtPlayhead(int playheadMs) {
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    final res = AudioEditingService.splitAudioClipAt(clips: clips, playheadMs: playheadMs);
+    if (res != null) {
+      _undoRedo.recordSnapshot(state);
+      state = state.copyWith(audioClips: res);
+      return true;
+    }
+    return false;
+  }
+
+  bool splitSpecificAudioClip(String clipId, {int? atTimelineMs}) {
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    final res = AudioEditingService.splitSpecificClip(clips: clips, clipId: clipId, splitTimelineMs: atTimelineMs);
+    if (res != null) {
+      _undoRedo.recordSnapshot(state);
+      state = state.copyWith(audioClips: res);
+      return true;
+    }
+    return false;
+  }
+
+  bool smartSplitAtPlayhead(int playheadMs, {String? selectedAudioId}) {
+    if (selectedAudioId != null) {
+      final audioOk = splitAudioAtPlayhead(playheadMs);
+      if (audioOk) return true;
+    }
+    final imageOk = splitAtPlayhead(playheadMs);
+    if (imageOk) return true;
+    final audioOk = splitAudioAtPlayhead(playheadMs);
+    if (audioOk) return true;
+    return false;
+  }
+
+  void deleteAudioClip(String clipId) {
+    _undoRedo.recordSnapshot(state);
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    final res = AudioEditingService.deleteAudioClip(clips: clips, clipId: clipId);
+    state = state.copyWith(
+      audioClips: res,
+      voiceOver: res.isNotEmpty ? VoiceOver(filePath: res.first.filePath, fileName: res.first.fileName, durationMs: res.fold<int>(0, (s, c) => s + c.durationMs)) : null,
+      clearVoiceOver: res.isEmpty,
+    );
+  }
+
+  void setAudioClipVolume(String clipId, double volume) {
+    _undoRedo.recordSnapshot(state);
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    state = state.copyWith(audioClips: AudioEditingService.updateVolume(clips: clips, clipId: clipId, volume: volume));
+  }
+
+  void trimAudioClip(String clipId, int newDurationMs) => trimAudioClipEnd(clipId, newDurationMs);
+  void removeVoiceOver() { _undoRedo.recordSnapshot(state); state = state.copyWith(clearVoiceOver: true, images: TimingEngine.calculateSequence(images: state.images, voiceOverDurationMs: null, snapFinalImageToAudio: false)); }
+  void toggleTimingMode() { _undoRedo.recordSnapshot(state); state = state.copyWith(timingMode: state.timingMode == TimingMode.automatic ? TimingMode.manual : TimingMode.automatic); }
+
+  void toggleTrackVisibility(String trackId) {
+    _undoRedo.recordSnapshot(state);
+    final updated = state.effectiveTracks.map((t) => t.id == trackId ? t.copyWith(isVisible: !t.isVisible) : t).toList();
+    state = state.copyWith(tracks: updated);
+  }
+
+  void toggleTrackMute(String trackId) {
+    _undoRedo.recordSnapshot(state);
+    final updated = state.effectiveTracks.map((t) => t.id == trackId ? t.copyWith(isMuted: !t.isMuted) : t).toList();
+    state = state.copyWith(tracks: updated);
+  }
+
+  void toggleImageMute(String imageId) {
+    _undoRedo.recordSnapshot(state);
+    final updated = state.images.map((img) => img.id == imageId ? img.copyWith(isMuted: !img.isMuted) : img).toList();
     state = state.copyWith(images: updated);
   }
 
-  void setVoiceOver(VoiceOver voiceOver) {
-    final recalculated = TimingEngine.calculateSequence(
-      images: state.images,
-      voiceOverDurationMs: voiceOver.durationMs,
-    );
+  void addTrack({required String name, required TrackType type}) {
+    _undoRedo.recordSnapshot(state);
+    final current = state.effectiveTracks;
+    state = state.copyWith(tracks: [...current, TimelineTrackItem(id: 'track_${_uuid.v4().substring(0, 8)}', name: name, type: type, orderIndex: current.length)]);
+  }
+
+  void removeTrack(String trackId) {
+    _undoRedo.recordSnapshot(state);
+    final target = state.effectiveTracks.where((t) => t.id == trackId).firstOrNull;
+    final updatedTracks = state.effectiveTracks.where((t) => t.id != trackId).toList();
+    final isAudio = target?.type == TrackType.audio;
+    final isText = target?.type == TrackType.text;
     state = state.copyWith(
-      voiceOver: voiceOver,
-      images: recalculated,
+      tracks: updatedTracks,
+      images: state.images.where((i) => i.trackId != trackId).toList(),
+      audioClips: isAudio ? const [] : state.audioClips,
+      clearVoiceOver: isAudio,
+      textOverlays: isText ? const [] : state.textOverlays,
     );
   }
 
-  void removeVoiceOver() {
-    final recalculated = TimingEngine.calculateSequence(
-      images: state.images,
-      voiceOverDurationMs: null,
-      snapFinalImageToAudio: false,
-    );
-    state = state.copyWith(
-      clearVoiceOver: true,
-      images: recalculated,
-    );
-  }
+  void recordSnapshot() => _undoRedo.recordSnapshot(state);
+  void addTextOverlay(TextOverlayItem item) { _undoRedo.recordSnapshot(state); state = state.copyWith(textOverlays: TextEditingService.addOverlay(state.textOverlays, item)); }
+  void updateTextOverlay(TextOverlayItem item, {bool recordUndo = true}) { if (recordUndo) _undoRedo.recordSnapshot(state); state = state.copyWith(textOverlays: TextEditingService.updateOverlay(state.textOverlays, item)); }
+  void deleteTextOverlay(String id) { _undoRedo.recordSnapshot(state); state = state.copyWith(textOverlays: TextEditingService.deleteOverlay(state.textOverlays, id)); }
+  void trimTextOverlay(String id, {int? startMs, int? durationMs, bool recordUndo = true}) { if (recordUndo) _undoRedo.recordSnapshot(state); state = state.copyWith(textOverlays: TextEditingService.trimOverlay(state.textOverlays, id, startMs: startMs, durationMs: durationMs)); }
 
-  void setAspectRatio(VideoAspectRatio ratio) {
-    state = state.copyWith(aspectRatio: ratio);
-  }
+  void updateImageTransform(String imageId, AssetTransform t, {bool recordUndo = true}) { if (recordUndo) _undoRedo.recordSnapshot(state); state = AssetAnimationService.updateTransform(state, imageId, t); }
+  void addImageAnimation(String imageId, AssetAnimation a) { _undoRedo.recordSnapshot(state); state = AssetAnimationService.addAnimation(state, imageId, a); }
+  void removeImageAnimation(String imageId, String animId) { _undoRedo.recordSnapshot(state); state = AssetAnimationService.removeAnimation(state, imageId, animId); }
+  void updateImageAnimation(String imageId, AssetAnimation a) { _undoRedo.recordSnapshot(state); state = AssetAnimationService.updateAnimation(state, imageId, a); }
+  void clearImageAnimations(String imageId) { _undoRedo.recordSnapshot(state); state = AssetAnimationService.clearAnimations(state, imageId); }
+  void applyAnimationRandomisation(List<ProposedAssignment> a, {int durationMs = 600}) { _undoRedo.recordSnapshot(state); state = AssetAnimationService.applyRandomisation(state, a, durationMs: durationMs); }
 
-  void setResolution(VideoResolution res) {
-    state = state.copyWith(resolution: res);
-  }
-
-  void newProject() {
-    state = Project(
-      id: _uuid.v4(),
-      name: 'Untitled Project',
-    );
-  }
-
-  void loadProject(Project loaded) {
-    state = loaded;
-  }
+  void setAspectRatio(VideoAspectRatio r) => state = state.copyWith(aspectRatio: r);
+  void setResolution(VideoResolution res) => state = state.copyWith(resolution: res);
+  void newProject() { _undoRedo.clear(); state = Project(id: _uuid.v4(), name: 'Untitled Project'); }
+  void loadProject(Project l) { _undoRedo.clear(); state = l; }
 }
 
-final projectProvider =
-    StateNotifierProvider<ProjectNotifier, Project>((ref) {
-  return ProjectNotifier();
-});
+final projectProvider = StateNotifierProvider<ProjectNotifier, Project>((ref) => ProjectNotifier());
