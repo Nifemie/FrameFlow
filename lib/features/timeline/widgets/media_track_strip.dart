@@ -5,13 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../models/image_item.dart';
+import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../services/playback_controller.dart';
+import 'asset_context_menus.dart';
 import 'timeline_clip.dart';
 import 'timeline_gap_item.dart';
 
 class MediaTrackStrip extends ConsumerWidget {
+  final TimelineTrackItem track;
   final List<ImageItem> images;
   final double contentWidth;
   final double pxPerSec;
@@ -22,6 +25,7 @@ class MediaTrackStrip extends ConsumerWidget {
 
   const MediaTrackStrip({
     super.key,
+    required this.track,
     required this.images,
     required this.contentWidth,
     required this.pxPerSec,
@@ -53,11 +57,21 @@ class MediaTrackStrip extends ConsumerWidget {
     final selectedIds = ref.watch(selectedClipIdsProvider);
 
     if (images.isEmpty) {
-      return DragTarget<ImageItem>(
-        onWillAcceptWithDetails: (_) => true,
-        onAcceptWithDetails: (details) {
-          ref.read(projectProvider.notifier).insertImagesAt(0, [details.data.filePath]);
-        },
+      return GestureDetector(
+        onSecondaryTapUp: (details) => AssetContextMenus.showTimelineMenu(
+          context: context,
+          ref: ref,
+          globalPosition: details.globalPosition,
+          track: track,
+          onAddMedia: onAdd,
+          onAddFolder: onAddFolder,
+          onAddBg: () => ref.read(projectProvider.notifier).addColorBackground(trackId: track.id),
+        ),
+        child: DragTarget<ImageItem>(
+          onWillAcceptWithDetails: (_) => true,
+          onAcceptWithDetails: (details) {
+            ref.read(projectProvider.notifier).insertImagesAt(0, [details.data.filePath], trackId: track.id);
+          },
         builder: (context, candidateData, _) {
           final isDropHover = candidateData.isNotEmpty;
           return Container(
@@ -103,18 +117,28 @@ class MediaTrackStrip extends ConsumerWidget {
             ),
           );
         },
+      ),
       );
     }
 
-    return DragTarget<ImageItem>(
-      onWillAcceptWithDetails: (_) => true,
-      onAcceptWithDetails: (details) {
-        final dropped = details.data;
-        if (!images.any((i) => i.id == dropped.id)) {
-          final targetTrackId = images.first.trackId;
-          ref.read(projectProvider.notifier).insertImagesAt(images.length, [dropped.filePath], trackId: targetTrackId);
-        }
-      },
+    return GestureDetector(
+      onSecondaryTapUp: (details) => AssetContextMenus.showTimelineMenu(
+        context: context,
+        ref: ref,
+        globalPosition: details.globalPosition,
+        track: track,
+        onAddMedia: onAdd,
+        onAddFolder: onAddFolder,
+        onAddBg: () => ref.read(projectProvider.notifier).addColorBackground(trackId: track.id),
+      ),
+      child: DragTarget<ImageItem>(
+        onWillAcceptWithDetails: (_) => true,
+        onAcceptWithDetails: (details) {
+          final dropped = details.data;
+          if (!images.any((i) => i.id == dropped.id)) {
+            ref.read(projectProvider.notifier).insertImagesAt(images.length, [dropped.filePath], trackId: track.id);
+          }
+        },
       builder: (context, candidateData, _) {
         final isDropHover = candidateData.isNotEmpty;
         return Container(
@@ -167,6 +191,7 @@ class MediaTrackStrip extends ConsumerWidget {
           ),
         );
       },
+    ),
     );
   }
 }

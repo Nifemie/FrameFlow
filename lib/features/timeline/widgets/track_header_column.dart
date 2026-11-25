@@ -11,14 +11,19 @@ import '../../../services/playback_controller.dart';
 import '../../../services/video_playback_engine.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
 import 'animation_randomisation_dialog.dart';
+import 'asset_context_menus.dart';
 
 class TrackHeaderColumn extends ConsumerWidget {
   final ScrollController? scrollController;
 
   const TrackHeaderColumn({super.key, this.scrollController});
 
-  Future<void> _pickImages(WidgetRef ref, String trackId) async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: AppConstants.supportedImageExtensions, allowMultiple: true);
+  Future<void> _pickMedia(WidgetRef ref, String trackId) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: [...AppConstants.supportedImageExtensions, ...AppConstants.supportedVideoExtensions],
+      allowMultiple: true,
+    );
     if (result != null) ref.read(projectProvider.notifier).addImages(result.paths.whereType<String>().toList(), trackId: trackId);
   }
 
@@ -61,7 +66,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                         if (val == 'audio') notifier.addTrack(name: 'Audio Track', type: TrackType.audio);
                         if (val == 'text') notifier.addTrack(name: 'Text / Titles', type: TrackType.text);
                         if (val == 'underlay') notifier.addTrack(name: 'BG (Underlay)', type: TrackType.backgroundUnderlay);
-                        if (val == 'overlay') notifier.addTrack(name: 'V2 (Overlay)', type: TrackType.overlayVideo);
+                        if (val == 'overlay') notifier.addTrack(name: 'Assets', type: TrackType.overlayVideo);
                       },
                       itemBuilder: (_) => [
                         if (!tracks.any((t) => t.type == TrackType.audio))
@@ -70,7 +75,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                           const PopupMenuItem(value: 'text', child: Text('+ Text / Titles Track', style: TextStyle(fontSize: 11, color: Colors.white))),
                         if (!tracks.any((t) => t.type == TrackType.backgroundUnderlay))
                           const PopupMenuItem(value: 'underlay', child: Text('+ Background Underlay Track', style: TextStyle(fontSize: 11, color: Colors.white))),
-                        const PopupMenuItem(value: 'overlay', child: Text('+ Video Overlay Track', style: TextStyle(fontSize: 11, color: Colors.white))),
+                        const PopupMenuItem(value: 'overlay', child: Text('+ Assets Track (Videos & Images)', style: TextStyle(fontSize: 11, color: Colors.white))),
                       ],
                     ),
                   ],
@@ -112,9 +117,17 @@ class TrackHeaderColumn extends ConsumerWidget {
                           }
                         }
                       : null,
-                  onAddMedia: isVideo ? () => _pickImages(ref, tr.id) : null,
+                  onAddMedia: isVideo ? () => _pickMedia(ref, tr.id) : null,
                   onAddBg: isVideo ? () => notifier.addColorBackground(trackId: tr.id) : null,
                   onAutoArrange: isVideo ? () => notifier.autoArrangeFromLeft(trackId: tr.id) : null,
+                  onSecondaryTapUp: (details) => AssetContextMenus.showTimelineMenu(
+                    context: context,
+                    ref: ref,
+                    globalPosition: details.globalPosition,
+                    track: tr,
+                    onAddMedia: isVideo ? () => _pickMedia(ref, tr.id) : null,
+                    onAddBg: isVideo ? () => notifier.addColorBackground(trackId: tr.id) : null,
+                  ),
                   onTimestamp: (isVideo || tr.type == TrackType.audio)
                       ? () => showDialog(
                             context: context,
@@ -139,11 +152,13 @@ class TrackHeaderColumn extends ConsumerWidget {
     required BuildContext context, required String label, required double height, required bool isVisible,
     required bool isMuted, required Color badgeColor, required VoidCallback onToggleVis, VoidCallback? onToggleMute,
     VoidCallback? onAddMedia, VoidCallback? onAddBg, VoidCallback? onAutoArrange, VoidCallback? onTimestamp, VoidCallback? onDelete,
-    VoidCallback? onTap,
+    VoidCallback? onTap, void Function(TapUpDetails)? onSecondaryTapUp,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
+    return GestureDetector(
+      onSecondaryTapUp: onSecondaryTapUp,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
       child: Container(
         height: height, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(4), border: Border.all(color: AppColors.surfaceBorder, width: 0.5)),
@@ -210,6 +225,7 @@ class TrackHeaderColumn extends ConsumerWidget {
           ],
         ],
       ),
+    ),
     ),
   );
 }

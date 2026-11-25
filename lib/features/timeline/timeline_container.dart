@@ -417,11 +417,12 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                                 for (final tr in tracks) ...[
                                                   if (tr.isVideoOrBg) ...[
                                                     MediaTrackStrip(
+                                                      track: tr,
                                                       images: project.imagesForTrack(tr.id),
                                                       contentWidth: contentWidth,
                                                       pxPerSec: pxPerSec,
                                                       zoom: zoom,
-                                                      emptyLabel: '+ Add Images / Background to ${tr.name}',
+                                                      emptyLabel: '+ Add Videos / Images / BG to ${tr.name}',
                                                       onAdd: () => _pickImagesForTrack(tr.id),
                                                       onAddFolder: () => _pickFolderForTrack(tr.id),
                                                     ),

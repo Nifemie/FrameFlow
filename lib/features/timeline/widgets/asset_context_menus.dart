@@ -6,10 +6,14 @@ import '../../../core/utils/time_parser.dart';
 import '../../../models/audio_clip_item.dart';
 import '../../../models/image_item.dart';
 import '../../../models/text_overlay_item.dart';
+import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../services/playback_controller.dart';
 import '../../../services/video_playback_engine.dart';
 import '../../properties/widgets/video_range_dialog.dart';
+import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
+import 'animation_randomisation_dialog.dart';
 import 'audio_volume_dialog.dart';
 
 /// Unified right-click context menu builder for all asset types (Images, Videos, Text, Audio).
@@ -308,5 +312,125 @@ class AssetContextMenus {
         ],
       ),
     );
+  }
+
+  /// Right-click context menu for an entire timeline track (affects the whole timeline).
+  static Future<void> showTimelineMenu({
+    required BuildContext context,
+    required WidgetRef ref,
+    required Offset globalPosition,
+    required TimelineTrackItem track,
+    VoidCallback? onAddMedia,
+    VoidCallback? onAddFolder,
+    VoidCallback? onAddBg,
+  }) async {
+    final notifier = ref.read(projectProvider.notifier);
+    final isMedia = track.isVideoOrBg;
+
+    final selected = await showMenu<String>(
+      context: context,
+      color: AppColors.surface,
+      position: RelativeRect.fromLTRB(globalPosition.dx, globalPosition.dy, globalPosition.dx, globalPosition.dy),
+      items: [
+        if (isMedia && onAddMedia != null)
+          const PopupMenuItem(
+            value: 'add_media',
+            child: Row(children: [Icon(Icons.add_photo_alternate_outlined, size: 15, color: AppColors.clipBlueLight), SizedBox(width: 8), Text('Add Videos / Images...', style: TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        if (isMedia && onAddFolder != null)
+          const PopupMenuItem(
+            value: 'add_folder',
+            child: Row(children: [Icon(Icons.folder_open, size: 15, color: AppColors.accentOrange), SizedBox(width: 8), Text('Import Folder of Media...', style: TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        if (isMedia && onAddBg != null)
+          const PopupMenuItem(
+            value: 'add_bg',
+            child: Row(children: [Icon(Icons.palette_outlined, size: 15, color: Colors.purpleAccent), SizedBox(width: 8), Text('Add Solid Color Background', style: TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        if (isMedia) const PopupMenuDivider(),
+        if (isMedia)
+          const PopupMenuItem(
+            value: 'randomize_anim',
+            child: Row(children: [Icon(Icons.auto_awesome, size: 15, color: AppColors.accentOrange), SizedBox(width: 8), Text('Randomize Animations...', style: TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        if (isMedia || track.type == TrackType.audio)
+          const PopupMenuItem(
+            value: 'bulk_timestamps',
+            child: Row(children: [Icon(Icons.access_time, size: 15, color: AppColors.accentOrange), SizedBox(width: 8), Text('Bulk Set / Import Timestamps...', style: TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        if (isMedia)
+          const PopupMenuItem(
+            value: 'pack_left',
+            child: Row(children: [Icon(Icons.format_align_left, size: 15, color: Colors.cyanAccent), SizedBox(width: 8), Text('Auto-Rearrange from Left (Pack)', style: TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'toggle_vis',
+          child: Row(children: [
+            Icon(track.isVisible ? Icons.visibility_off : Icons.visibility, size: 15, color: Colors.white70),
+            const SizedBox(width: 8),
+            Text(track.isVisible ? 'Hide Timeline' : 'Show Timeline', style: const TextStyle(fontSize: 12, color: Colors.white)),
+          ]),
+        ),
+        if (track.canMute)
+          PopupMenuItem(
+            value: 'toggle_mute',
+            child: Row(children: [
+              Icon(track.isMuted ? Icons.volume_up : Icons.volume_off, size: 15, color: track.isMuted ? AppColors.exportGreen : AppColors.errorRed),
+              const SizedBox(width: 8),
+              Text(track.isMuted ? 'Unmute Timeline Audio' : 'Mute Timeline Audio', style: const TextStyle(fontSize: 12, color: Colors.white)),
+            ]),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'delete_track',
+          child: Row(children: [Icon(Icons.delete_outline, size: 15, color: AppColors.errorRed), SizedBox(width: 8), Text('Delete / Clear Timeline', style: TextStyle(fontSize: 12, color: AppColors.errorRed))]),
+        ),
+      ],
+    );
+
+    if (!context.mounted || selected == null) return;
+    switch (selected) {
+      case 'add_media':
+        onAddMedia?.call();
+        break;
+      case 'add_folder':
+        onAddFolder?.call();
+        break;
+      case 'add_bg':
+        onAddBg?.call();
+        break;
+      case 'randomize_anim':
+        showDialog(context: context, builder: (_) => const AnimationRandomisationDialog());
+        break;
+      case 'bulk_timestamps':
+        showDialog(
+          context: context,
+          builder: (_) => BulkTimestampDialog(
+            trackId: track.id,
+            trackName: track.name,
+            isAudio: track.type == TrackType.audio,
+          ),
+        );
+        break;
+      case 'pack_left':
+        notifier.autoArrangeFromLeft(trackId: track.id);
+        break;
+      case 'toggle_vis':
+        notifier.toggleTrackVisibility(track.id);
+        break;
+      case 'toggle_mute':
+        notifier.toggleTrackMute(track.id);
+        final willBeMuted = !track.isMuted;
+        if (track.type == TrackType.audio) {
+          ref.read(playbackControllerProvider).setLiveVolume(willBeMuted ? 0.0 : 1.0);
+        } else {
+          VideoPlaybackEngine.setVolume(willBeMuted ? 0.0 : 100.0);
+        }
+        break;
+      case 'delete_track':
+        notifier.removeTrack(track.id);
+        break;
+    }
   }
 }

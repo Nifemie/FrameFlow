@@ -89,6 +89,24 @@ class ProjectNotifier extends StateNotifier<Project> {
     final updated = List<ImageItem>.from(state.images)..insertAll(idx, items);
     for (int i = 0; i < updated.length; i++) { updated[i] = updated[i].copyWith(orderIndex: i); }
     state = state.copyWith(images: TimingEngine.calculateSequence(images: updated, voiceOverDurationMs: state.voiceOver?.durationMs));
+
+    for (final item in items) {
+      if (item.isVideo) {
+        VideoMetadataService.resolveDuration(item.filePath).then((durMs) {
+          if (durMs > 0) {
+            final current = state.images.where((img) => img.id == item.id).firstOrNull;
+            if (current != null) {
+              final withSource = state.images.map((img) => img.id == item.id ? img.copyWith(sourceDurationMs: durMs) : img).toList();
+              state = state.copyWith(images: withSource);
+              final newEnd = current.startMs + durMs;
+              updateTimestamp(item.id, (newEnd / 1000).toStringAsFixed(2), recordUndo: false);
+            }
+          }
+        });
+        VideoMetadataService.getThumbnailPath(item.filePath);
+        VideoMetadataService.getAudioTrackPath(item.filePath);
+      }
+    }
   }
 
   void trimClipEnd(String imageId, int newEndMs, {bool recordUndo = true}) {

@@ -17,6 +17,7 @@ class AppConstants {
     'webp',
     'bmp',
     'tiff',
+    'tif',
     'jfif',
     'gif',
     'avif',
@@ -28,6 +29,13 @@ class AppConstants {
     'webm',
     'avi',
     'mkv',
+    'wmv',
+    'flv',
+    'm4v',
+    'mpeg',
+    'mpg',
+    '3gp',
+    'ts',
   ];
 
   static const List<String> supportedAudioExtensions = [
