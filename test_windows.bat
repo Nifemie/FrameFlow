@@ -129,6 +129,13 @@ if "%USER_CHOICE%"=="2" (
     echo.
     echo [*] Starting FrameFlow Studio on Windows Desktop...
     call flutter run -d windows
+    if !ERRORLEVEL! neq 0 (
+        echo.
+        echo [!] If you see "Building with plugins requires symlink support":
+        echo     Windows Developer Mode must be enabled once.
+        set /p OPEN_DEV="Open Windows Developer Settings now? (Y/N): "
+        if /i "!OPEN_DEV!"=="Y" start ms-settings:developers
+    )
     pause
     goto :menu
 )
