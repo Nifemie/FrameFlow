@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frameflow/models/image_item.dart';
 import 'package:frameflow/models/timeline_track_item.dart';
 import 'package:frameflow/providers/project_provider.dart';
+import 'package:frameflow/services/clip_editing_service.dart';
 import 'package:frameflow/services/timeline_arrangement_service.dart';
 
 void main() {
@@ -143,6 +144,54 @@ void main() {
 
       notifier.removeImage(overlayClipId);
       expect(notifier.state.tracks.any((t) => t.id == overlayTrack.id), isFalse);
+    });
+
+    test('Extending clip right into blank gap reduces only the blank gap, overflow pushes next clip', () {
+      final images = [
+        const ImageItem(id: 'a', filePath: 'a.jpg', displayName: 'A', orderIndex: 0, startMs: 0, endMs: 5000, durationMs: 5000, userStartTimestampInput: '0.00', userEndTimestampInput: '5.00'),
+        // 5s blank from 5s..10s
+        const ImageItem(id: 'b', filePath: 'b.jpg', displayName: 'B', orderIndex: 1, startMs: 10000, endMs: 15000, durationMs: 5000, userStartTimestampInput: '10.00', userEndTimestampInput: '15.00'),
+      ];
+
+      // 1. Extend A from 5s to 7s (partially into 5s..10s blank) -> B stays at 10s..15s!
+      final partial = ClipEditingService.rippleTrimClipEnd(
+        images: images,
+        clipId: 'a',
+        newEndMs: 7000,
+      );
+      expect(partial[0].startMs, equals(0));
+      expect(partial[0].endMs, equals(7000));
+      expect(partial[1].startMs, equals(10000));
+      expect(partial[1].endMs, equals(15000));
+
+      // 2. Extend A from 5s to 12s (fully covers 5s..10s blank + 2s overflow) -> B pushed by +2s to 12s..17s!
+      final overflow = ClipEditingService.rippleTrimClipEnd(
+        images: images,
+        clipId: 'a',
+        newEndMs: 12000,
+      );
+      expect(overflow[0].startMs, equals(0));
+      expect(overflow[0].endMs, equals(12000));
+      expect(overflow[1].startMs, equals(12000));
+      expect(overflow[1].endMs, equals(17000));
+    });
+
+    test('Extending clip left into blank gap reduces only the blank gap', () {
+      final images = [
+        const ImageItem(id: 'a', filePath: 'a.jpg', displayName: 'A', orderIndex: 0, startMs: 0, endMs: 5000, durationMs: 5000, userStartTimestampInput: '0.00', userEndTimestampInput: '5.00'),
+        // 5s blank from 5s..10s
+        const ImageItem(id: 'b', filePath: 'b.jpg', displayName: 'B', orderIndex: 1, startMs: 10000, endMs: 15000, durationMs: 5000, userStartTimestampInput: '10.00', userEndTimestampInput: '15.00'),
+      ];
+
+      final res = ClipEditingService.trimClipStart(
+        images: images,
+        clipId: 'b',
+        newStartMs: 7000,
+      );
+      expect(res[0].startMs, equals(0));
+      expect(res[0].endMs, equals(5000));
+      expect(res[1].startMs, equals(7000));
+      expect(res[1].endMs, equals(15000));
     });
   });
 }

@@ -156,6 +156,7 @@ class _TimelineClipState extends ConsumerState<TimelineClip> {
                 ),
               ),
             if (!isGhost) ...[
+              Positioned(left: 0, top: 0, bottom: 0, child: ClipTrimHandle(item: item, zoomScale: widget.zoomScale, isClipHoveredOrSelected: isHoveredOrSelected, isLeftEdge: true)),
               Positioned(right: 0, top: 0, bottom: 0, child: ClipTrimHandle(item: item, zoomScale: widget.zoomScale, isClipHoveredOrSelected: isHoveredOrSelected)),
               if (isHoveredOrSelected) Positioned(right: -9, top: 23, child: ClipInsertButton(afterClip: item)),
             ],

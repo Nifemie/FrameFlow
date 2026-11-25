@@ -96,6 +96,11 @@ class ProjectNotifier extends StateNotifier<Project> {
     state = state.copyWith(images: ClipEditingService.rippleTrimClipEnd(images: state.images, clipId: imageId, newEndMs: newEndMs, voiceOverDurationMs: state.voiceOver?.durationMs));
   }
 
+  void trimClipStart(String imageId, int newStartMs, {bool recordUndo = true}) {
+    if (recordUndo) _undoRedo.recordSnapshot(state);
+    state = state.copyWith(images: ClipEditingService.trimClipStart(images: state.images, clipId: imageId, newStartMs: newStartMs, voiceOverDurationMs: state.voiceOver?.durationMs));
+  }
+
   void snapClipToAudio(String imageId) { if (state.voiceOver != null) trimClipEnd(imageId, state.voiceOver!.durationMs); }
   void removeImage(String id, {bool preserveGap = false}) {
     if (preserveGap) {

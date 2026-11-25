@@ -148,8 +148,9 @@ class ClipEditingService {
     );
   }
 
-  /// Trims or extends clip end boundary and ripples all subsequent clips forward/backward,
-  /// preserving their individual durations so subsequent clips shift forward instead of hiding behind.
+  /// Trims or extends clip end boundary.
+  /// If a blank gap exists immediately after [clipId], extending consumes the blank gap first
+  /// without moving subsequent clips; only overflow beyond the gap pushes subsequent clips forward.
   static List<ImageItem> rippleTrimClipEnd({
     required List<ImageItem> images,
     required String clipId,
@@ -165,6 +166,27 @@ class ClipEditingService {
     final deltaMs = clampedEnd - target.endMs;
     if (deltaMs == 0) return images;
 
+    // Find the immediate next clip on the same track to see if there is a blank gap after target
+    ImageItem? nextOnTrack;
+    for (int i = idx + 1; i < images.length; i++) {
+      if (images[i].trackId == target.trackId) {
+        nextOnTrack = images[i];
+        break;
+      }
+    }
+
+    final gapAfterTarget = nextOnTrack != null ? (nextOnTrack.startMs - target.endMs).clamp(0, 36000000) : 0;
+
+    // If extending (deltaMs > 0): consume blank gap first, only push subsequent clips by overflow.
+    // If shrinking (deltaMs < 0): if there was already a blank gap, keep subsequent clips in place;
+    // if adjacent (gapAfterTarget == 0), ripple-pull subsequent clips backward.
+    final int pushDeltaMs;
+    if (deltaMs > 0) {
+      pushDeltaMs = deltaMs > gapAfterTarget ? (deltaMs - gapAfterTarget) : 0;
+    } else {
+      pushDeltaMs = gapAfterTarget > 0 ? 0 : deltaMs;
+    }
+
     final updated = <ImageItem>[];
     for (int i = 0; i < images.length; i++) {
       final img = images[i];
@@ -176,24 +198,99 @@ class ClipEditingService {
         updated.add(img);
       } else if (i == idx) {
         updated.add(img.copyWith(
+          userStartTimestampInput: img.userStartTimestampInput ?? (img.startMs / 1000.0).toStringAsFixed(2),
           userEndTimestampInput: (clampedEnd / 1000.0).toStringAsFixed(2),
         ));
       } else {
-        String? newStart;
-        if (img.userStartTimestampInput != null) {
-          final sMs = TimeParser.parseToMs(img.userStartTimestampInput);
-          if (sMs != null) newStart = ((sMs + deltaMs) / 1000.0).toStringAsFixed(2);
-        }
-        String? newEnd;
-        if (img.userEndTimestampInput != null) {
-          final eMs = TimeParser.parseToMs(img.userEndTimestampInput);
-          if (eMs != null) newEnd = ((eMs + deltaMs) / 1000.0).toStringAsFixed(2);
+        if (pushDeltaMs == 0) {
+          // Lock subsequent clip at its exact position so only the blank gap shrinks/widens
+          updated.add(img.copyWith(
+            userStartTimestampInput: img.userStartTimestampInput ?? (img.startMs / 1000.0).toStringAsFixed(2),
+            userEndTimestampInput: img.userEndTimestampInput ?? (img.endMs / 1000.0).toStringAsFixed(2),
+          ));
         } else {
-          newEnd = ((img.endMs + deltaMs) / 1000.0).toStringAsFixed(2);
+          final shiftedStart = img.startMs + pushDeltaMs;
+          final shiftedEnd = img.endMs + pushDeltaMs;
+          updated.add(img.copyWith(
+            userStartTimestampInput: (shiftedStart / 1000.0).toStringAsFixed(2),
+            userEndTimestampInput: (shiftedEnd / 1000.0).toStringAsFixed(2),
+          ));
         }
+      }
+    }
+
+    return TimingEngine.calculateSequence(
+      images: updated,
+      voiceOverDurationMs: voiceOverDurationMs,
+      snapFinalImageToAudio: false,
+    );
+  }
+
+  /// Trims or extends clip start boundary from the left edge.
+  /// Expanding left into a blank gap reduces only the blank gap; dragging further past the
+  /// previous clip's end pushes [clipId]'s end and subsequent clips forward.
+  static List<ImageItem> trimClipStart({
+    required List<ImageItem> images,
+    required String clipId,
+    required int newStartMs,
+    int? voiceOverDurationMs,
+  }) {
+    final idx = images.indexWhere((img) => img.id == clipId);
+    if (idx < 0) return images;
+
+    final target = images[idx];
+    ImageItem? prevOnTrack;
+    for (int i = idx - 1; i >= 0; i--) {
+      if (images[i].trackId == target.trackId) {
+        prevOnTrack = images[i];
+        break;
+      }
+    }
+
+    final minAllowedStart = prevOnTrack != null ? prevOnTrack.endMs : 0;
+    final maxAllowedStart = target.endMs - 200;
+
+    final int actualStartMs;
+    final int overflowRightMs;
+    if (newStartMs < minAllowedStart) {
+      // Blank gap is fully covered; excess expansion pushes this clip's end & subsequent clips forward
+      actualStartMs = minAllowedStart;
+      overflowRightMs = minAllowedStart - newStartMs;
+    } else {
+      actualStartMs = newStartMs > maxAllowedStart ? maxAllowedStart : newStartMs;
+      overflowRightMs = 0;
+    }
+
+    // Check gap after target if overflowRightMs > 0
+    ImageItem? nextOnTrack;
+    for (int i = idx + 1; i < images.length; i++) {
+      if (images[i].trackId == target.trackId) {
+        nextOnTrack = images[i];
+        break;
+      }
+    }
+    final gapAfterTarget = nextOnTrack != null ? (nextOnTrack.startMs - target.endMs).clamp(0, 36000000) : 0;
+    final pushNextMs = overflowRightMs > gapAfterTarget ? (overflowRightMs - gapAfterTarget) : 0;
+
+    final updated = <ImageItem>[];
+    for (int i = 0; i < images.length; i++) {
+      final img = images[i];
+      if (img.trackId != target.trackId || i < idx) {
+        updated.add(img);
+        continue;
+      }
+      if (i == idx) {
+        final newEnd = target.endMs + overflowRightMs;
         updated.add(img.copyWith(
-          userStartTimestampInput: newStart,
-          userEndTimestampInput: newEnd,
+          userStartTimestampInput: (actualStartMs / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: (newEnd / 1000.0).toStringAsFixed(2),
+        ));
+      } else {
+        final shiftedStart = img.startMs + pushNextMs;
+        final shiftedEnd = img.endMs + pushNextMs;
+        updated.add(img.copyWith(
+          userStartTimestampInput: (shiftedStart / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: (shiftedEnd / 1000.0).toStringAsFixed(2),
         ));
       }
     }

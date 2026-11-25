@@ -12,12 +12,14 @@ class ClipTrimHandle extends ConsumerStatefulWidget {
   final ImageItem item;
   final double zoomScale;
   final bool isClipHoveredOrSelected;
+  final bool isLeftEdge;
 
   const ClipTrimHandle({
     super.key,
     required this.item,
     required this.zoomScale,
     this.isClipHoveredOrSelected = false,
+    this.isLeftEdge = false,
   });
 
   @override
@@ -26,7 +28,7 @@ class ClipTrimHandle extends ConsumerStatefulWidget {
 
 class _ClipTrimHandleState extends ConsumerState<ClipTrimHandle> {
   double _accumulatedDelta = 0;
-  int _initialEndMs = 0;
+  int _initialEdgeMs = 0;
   bool _isHandleHovered = false;
 
   @override
@@ -44,17 +46,20 @@ class _ClipTrimHandleState extends ConsumerState<ClipTrimHandle> {
         onHorizontalDragStart: (_) {
           ref.read(projectProvider.notifier).recordSnapshot();
           _accumulatedDelta = 0;
-          _initialEndMs = widget.item.endMs;
+          _initialEdgeMs = widget.isLeftEdge ? widget.item.startMs : widget.item.endMs;
         },
         onHorizontalDragUpdate: (details) {
           _accumulatedDelta += details.delta.dx;
           final deltaMs = ((_accumulatedDelta / pxPerSec) * 1000).round();
-          int newEndMs = max(widget.item.startMs + 200, _initialEndMs + deltaMs);
+          int newEdgeMs = widget.isLeftEdge
+              ? max(0, min(widget.item.endMs - 200, _initialEdgeMs + deltaMs))
+              : max(widget.item.startMs + 200, _initialEdgeMs + deltaMs);
 
           final snapOn = ref.read(snappingEnabledProvider);
           if (snapOn) {
             final project = ref.read(projectProvider);
             final targets = <int>[
+              0,
               ref.read(playheadPositionProvider),
               ?voiceOverDuration,
               ...project.markers.map((m) => m.timestampMs),
@@ -62,22 +67,32 @@ class _ClipTrimHandleState extends ConsumerState<ClipTrimHandle> {
               ...project.textOverlays.expand((t) => [t.startMs, t.endMs]),
             ];
             final (snapped, line) = TimelineArrangementService.snapToTargets(
-              targetMs: newEndMs,
+              targetMs: newEdgeMs,
               targets: targets,
               pxPerSec: pxPerSec,
               enabled: true,
             );
-            newEndMs = max(widget.item.startMs + 200, snapped);
+            newEdgeMs = widget.isLeftEdge
+                ? max(0, min(widget.item.endMs - 200, snapped))
+                : max(widget.item.startMs + 200, snapped);
             ref.read(activeSnapLineMsProvider.notifier).state = line;
           } else {
             ref.read(activeSnapLineMsProvider.notifier).state = null;
           }
 
-          ref.read(projectProvider.notifier).trimClipEnd(
-            widget.item.id,
-            newEndMs,
-            recordUndo: false,
-          );
+          if (widget.isLeftEdge) {
+            ref.read(projectProvider.notifier).trimClipStart(
+              widget.item.id,
+              newEdgeMs,
+              recordUndo: false,
+            );
+          } else {
+            ref.read(projectProvider.notifier).trimClipEnd(
+              widget.item.id,
+              newEdgeMs,
+              recordUndo: false,
+            );
+          }
         },
         onHorizontalDragEnd: (_) {
           ref.read(activeSnapLineMsProvider.notifier).state = null;
