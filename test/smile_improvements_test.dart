@@ -32,11 +32,12 @@ void main() {
         const ImageItem(id: 'c', filePath: 'c.jpg', displayName: 'C', orderIndex: 2, startMs: 20000, endMs: 25000, durationMs: 5000, userStartTimestampInput: '20.00', userEndTimestampInput: '25.00'),
       ];
 
-      // Drag C (20s->25s) into the blank space starting at 5s
+      // Drag C (20s->25s) into the blank space starting at 5s..15s
       final res = TimelineArrangementService.fillGapWithClip(
         images: images,
         clipId: 'c',
         startMs: 5000,
+        gapEndMs: 15000,
         targetTrackId: 'track_v1',
       );
 
@@ -51,6 +52,30 @@ void main() {
       // B stays at 15s (not pushed further!)
       expect(b.startMs, equals(15000));
       expect(b.endMs, equals(20000));
+    });
+
+    test('Dragging larger clip into smaller blank gap fits without pushing next clip', () {
+      final images = [
+        const ImageItem(id: 'a', filePath: 'a.jpg', displayName: 'A', orderIndex: 0, startMs: 0, endMs: 5000, durationMs: 5000, userStartTimestampInput: '0.00', userEndTimestampInput: '5.00'),
+        // Blank space from 5s to 9.4s (4.4s)
+        const ImageItem(id: 'b', filePath: 'b.jpg', displayName: 'B', orderIndex: 1, startMs: 9400, endMs: 14400, durationMs: 5000, userStartTimestampInput: '9.40', userEndTimestampInput: '14.40'),
+        const ImageItem(id: 'c', filePath: 'c.jpg', displayName: 'C', orderIndex: 2, startMs: 14400, endMs: 19400, durationMs: 5000, userStartTimestampInput: '14.40', userEndTimestampInput: '19.40'),
+      ];
+
+      final res = TimelineArrangementService.fillGapWithClip(
+        images: images,
+        clipId: 'c',
+        startMs: 5000,
+        gapEndMs: 9400,
+        targetTrackId: 'track_v1',
+      );
+
+      final c = res.firstWhere((i) => i.id == 'c');
+      final b = res.firstWhere((i) => i.id == 'b');
+      expect(c.startMs, equals(5000));
+      expect(c.endMs, equals(9400));
+      expect(b.startMs, equals(9400));
+      expect(b.endMs, equals(14400));
     });
 
     test('Auto-rearrange from left packs clips sequentially from 00:00', () {

@@ -50,7 +50,9 @@ class TimelineGapItem extends ConsumerWidget {
           final box = context.findRenderObject() as RenderBox?;
           int dropMs = startMs;
           if (box != null && box.hasSize) {
-            final local = box.globalToLocal(details.offset);
+            // details.offset is top-left of the 75px feedback card; use center X for accurate cursor position
+            final centerGlobal = Offset(details.offset.dx + 37.5, details.offset.dy);
+            final local = box.globalToLocal(centerGlobal);
             final offsetMs = ((local.dx.clamp(0.0, box.size.width) / pxPerSec) * 1000).round();
             dropMs = (startMs + offsetMs).clamp(startMs, endMs - 200);
           }
@@ -79,38 +81,45 @@ class TimelineGapItem extends ConsumerWidget {
         },
         builder: (context, candidateData, _) {
           final isTargeted = candidateData.isNotEmpty;
-          return PopupMenuButton<String>(
-            tooltip: 'Fill Blank Gap (${durationSec}s)',
-            padding: EdgeInsets.zero,
-            color: AppColors.surface,
-            onSelected: (val) {
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            onSecondaryTapUp: (details) async {
+              final val = await showMenu<String>(
+                context: context,
+                color: AppColors.surface,
+                position: RelativeRect.fromLTRB(details.globalPosition.dx, details.globalPosition.dy, details.globalPosition.dx, details.globalPosition.dy),
+                items: [
+                  PopupMenuItem(value: 'seek', child: Row(children: [const Icon(Icons.play_arrow, size: 14, color: Colors.white70), const SizedBox(width: 8), Text('Seek to $durationSec s', style: const TextStyle(fontSize: 11, color: Colors.white))])),
+                  PopupMenuItem(value: 'color', child: Row(children: [const Icon(Icons.palette_outlined, size: 14, color: Colors.purpleAccent), const SizedBox(width: 8), Text('Fill Empty Space with Color ($durationSec s)', style: const TextStyle(fontSize: 11, color: Colors.white))])),
+                  PopupMenuItem(value: 'image', child: Row(children: [const Icon(Icons.add_photo_alternate, size: 14, color: AppColors.clipBlue), const SizedBox(width: 8), Text('Fill Empty Space with Image ($durationSec s)', style: const TextStyle(fontSize: 11, color: Colors.white))])),
+                ],
+              );
               if (val == 'image') _pickImageToFill(ref);
               if (val == 'color') _fillColorMatte(ref);
               if (val == 'seek') onTap?.call();
             },
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'seek', child: Row(children: [const Icon(Icons.play_arrow, size: 14, color: Colors.white70), const SizedBox(width: 8), Text('Seek to $durationSec s', style: const TextStyle(fontSize: 11, color: Colors.white))])),
-              PopupMenuItem(value: 'color', child: Row(children: [const Icon(Icons.palette_outlined, size: 14, color: Colors.purpleAccent), const SizedBox(width: 8), Text('Fill Gap with Color Matte ($durationSec s)', style: const TextStyle(fontSize: 11, color: Colors.white))])),
-              PopupMenuItem(value: 'image', child: Row(children: [const Icon(Icons.add_photo_alternate, size: 14, color: AppColors.clipBlue), const SizedBox(width: 8), Text('Fill Gap with Image ($durationSec s)', style: const TextStyle(fontSize: 11, color: Colors.white))])),
-            ],
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 1),
               decoration: BoxDecoration(
-                color: isTargeted ? AppColors.clipBlue.withValues(alpha: 0.4) : Colors.black.withValues(alpha: 0.75),
+                color: isTargeted ? AppColors.clipBlue.withValues(alpha: 0.28) : Colors.transparent,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: isTargeted ? AppColors.clipBlue : Colors.white24, width: isTargeted ? 1.5 : 1.0),
+                border: Border.all(
+                  color: isTargeted ? AppColors.clipBlueLight : Colors.white12,
+                  width: isTargeted ? 1.5 : 0.8,
+                ),
               ),
               child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.videocam_off_outlined, size: 12, color: Colors.white54),
-                    if (width > 50) ...[
-                      const SizedBox(width: 4),
-                      Text('Blank ($durationSec s)', style: const TextStyle(fontSize: 8.5, color: Colors.white70, fontWeight: FontWeight.bold)),
-                    ],
-                  ],
-                ),
+                child: width > 55
+                    ? Text(
+                        isTargeted ? 'Drop Here' : '${durationSec}s',
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          color: isTargeted ? Colors.white : Colors.white30,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      )
+                    : null,
               ),
             ),
           );

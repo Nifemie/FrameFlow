@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
@@ -159,10 +160,15 @@ class TimelineArrangementService {
     return TimingEngine.calculateSequence(images: updated, voiceOverDurationMs: voiceOverDurationMs, snapFinalImageToAudio: false);
   }
 
-  static List<ImageItem> fillGapWithClip({required List<ImageItem> images, required String clipId, required int startMs, required String targetTrackId, int? voiceOverDurationMs}) {
+  static List<ImageItem> fillGapWithClip({required List<ImageItem> images, required String clipId, required int startMs, required int gapEndMs, required String targetTrackId, int? voiceOverDurationMs}) {
     final idx = images.indexWhere((i) => i.id == clipId);
     if (idx < 0) return images;
-    final clip = images[idx], dur = clip.durationMs > 0 ? clip.durationMs : 5000;
+    final clip = images[idx];
+    final originalDur = clip.durationMs > 0 ? clip.durationMs : 5000;
+    // Clamp duration to gapEndMs so dropping a clip into a blank gap never pushes subsequent clips forward
+    final maxAllowedDur = gapEndMs > startMs ? (gapEndMs - startMs) : originalDur;
+    final dur = originalDur <= maxAllowedDur ? originalDur : max(200, maxAllowedDur);
+
     final list = <ImageItem>[];
     for (int i = 0; i < images.length; i++) {
       if (i == idx) continue;

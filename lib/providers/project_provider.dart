@@ -154,7 +154,7 @@ class ProjectNotifier extends StateNotifier<Project> {
   void fillBlankGap({required int startMs, required int endMs, required String trackId, required bool isColorBg, String? imagePath, Color? color, String? existingClipId}) {
     _undoRedo.recordSnapshot(state);
     if (existingClipId != null) {
-      state = state.copyWith(images: TimelineArrangementService.fillGapWithClip(images: state.images, clipId: existingClipId, startMs: startMs, targetTrackId: trackId, voiceOverDurationMs: state.voiceOver?.durationMs));
+      state = state.copyWith(images: TimelineArrangementService.fillGapWithClip(images: state.images, clipId: existingClipId, startMs: startMs, gapEndMs: endMs, targetTrackId: trackId, voiceOverDurationMs: state.voiceOver?.durationMs));
     } else {
       state = state.copyWith(images: TimelineArrangementService.fillGap(images: state.images, startMs: startMs, endMs: endMs, trackId: trackId, isColorBg: isColorBg, imagePath: imagePath, color: color, voiceOverDurationMs: state.voiceOver?.durationMs));
     }
