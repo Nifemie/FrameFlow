@@ -162,25 +162,51 @@ class AudioWaveformStrip extends ConsumerWidget {
 
 class _WaveformPainter extends CustomPainter {
   final String fileName;
-  _WaveformPainter({required this.fileName});
+  final List<double>? peaks;
+  final int fileStartOffsetMs;
+  final int durationMs;
+  final double volume;
+
+  _WaveformPainter({
+    required this.fileName,
+    this.peaks,
+    this.fileStartOffsetMs = 0,
+    this.durationMs = 0,
+    this.volume = 1.0,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final barPaint = Paint()..color = AppColors.waveform.withValues(alpha: 0.75)..strokeWidth = 2.0..strokeCap = StrokeCap.round;
+    final barPaint = Paint()..color = AppColors.waveform.withValues(alpha: 0.85)..strokeWidth = 2.0..strokeCap = StrokeCap.round;
     final centerY = size.height / 2;
-    const barSpacing = 4.0;
-    final barCount = (size.width / barSpacing).floor();
-    final random = Random(fileName.hashCode);
+    const barSpacing = 3.0;
+    final barCount = max(1, (size.width / barSpacing).floor());
+    final maxHalfHeight = size.height / 2 - 3;
 
-    for (int i = 0; i < barCount; i++) {
-      final x = i * barSpacing + 2.0;
-      final amplitude = (random.nextDouble() * 0.7 + 0.3) * (size.height / 2 - 4);
-      canvas.drawLine(Offset(x, centerY - amplitude), Offset(x, centerY + amplitude), barPaint);
+    if (peaks != null && peaks!.isNotEmpty && durationMs > 0) {
+      final totalBins = peaks!.length;
+      const binsPerSec = AudioProbeService.waveformBinsPerSecond;
+      for (int i = 0; i < barCount; i++) {
+        final x = i * barSpacing + 1.5;
+        final tMs = fileStartOffsetMs + ((i + 0.5) / barCount) * durationMs;
+        final binIdx = ((tMs * binsPerSec) / 1000.0).floor().clamp(0, totalBins - 1);
+        final amp = (peaks![binIdx] * volume.clamp(0.0, 1.5)).clamp(0.03, 1.0) * maxHalfHeight;
+        canvas.drawLine(Offset(x, centerY - amp), Offset(x, centerY + amp), barPaint);
+      }
+    } else {
+      // Subtle baseline while real PCM peaks are decoding
+      final flatPaint = Paint()..color = AppColors.waveform.withValues(alpha: 0.35)..strokeWidth = 1.2;
+      canvas.drawLine(Offset(0, centerY), Offset(size.width, centerY), flatPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _WaveformPainter old) => old.fileName != fileName;
+  bool shouldRepaint(covariant _WaveformPainter old) =>
+      old.fileName != fileName ||
+      old.peaks != peaks ||
+      old.fileStartOffsetMs != fileStartOffsetMs ||
+      old.durationMs != durationMs ||
+      old.volume != volume;
 }
 
 class _AudioClipCard extends ConsumerStatefulWidget {
@@ -322,14 +348,30 @@ class _AudioClipCardState extends ConsumerState<_AudioClipCard> {
                     clipBehavior: Clip.antiAlias,
                     child: Stack(
                       children: [
-                        // Waveform Canvas
+                        // Waveform Canvas (real PCM peaks)
                         Positioned.fill(
-                          child: Opacity(
-                            opacity: isSelected ? 1.0 : 0.7,
-                            child: CustomPaint(
-                              size: Size(width, 36),
-                              painter: _WaveformPainter(fileName: clip.fileName),
-                            ),
+                          child: Builder(
+                            builder: (context) {
+                              final peaks = AudioProbeService.getCachedWaveformPeaks(clip.filePath);
+                              if (peaks == null) {
+                                AudioProbeService.getWaveformPeaks(clip.filePath).then((p) {
+                                  if (p != null && mounted) setState(() {});
+                                });
+                              }
+                              return Opacity(
+                                opacity: isSelected ? 1.0 : 0.8,
+                                child: CustomPaint(
+                                  size: Size(width, 36),
+                                  painter: _WaveformPainter(
+                                    fileName: clip.fileName,
+                                    peaks: peaks,
+                                    fileStartOffsetMs: clip.fileStartOffsetMs,
+                                    durationMs: clip.durationMs,
+                                    volume: clip.volume,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
 

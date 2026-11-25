@@ -33,21 +33,40 @@ class _TimelineClipState extends ConsumerState<TimelineClip> {
     ref.read(projectProvider.notifier).swapImageClips(widget.item.id, allImages[targetOrder].id);
   }
 
-  Widget _buildMediaThumbnail(ImageItem item) {
+  Widget _buildMediaThumbnail(ImageItem item, {double clipWidth = 75.0}) {
     if (item.isVideo) {
-      final thumbPath = VideoMetadataService.getCachedThumbnail(item.filePath);
-      if (thumbPath != null && File(thumbPath).existsSync()) {
-        return Image.file(
-          File(thumbPath),
-          cacheWidth: 120,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildVideoFallback(),
-        );
+      final tileCount = (clipWidth / 56.0).ceil().clamp(1, 40);
+      final baseThumb = VideoMetadataService.getCachedThumbnail(item.filePath);
+      if (baseThumb == null) {
+        VideoMetadataService.getThumbnailPath(item.filePath).then((p) {
+          if (p != null && mounted) setState(() {});
+        });
       }
-      VideoMetadataService.getThumbnailPath(item.filePath).then((p) {
-        if (p != null && mounted) setState(() {});
-      });
-      return _buildVideoFallback();
+
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: List.generate(tileCount, (t) {
+          final tileSourceMs = item.sourceStartOffsetMs +
+              (((t + 0.5) / tileCount) * item.durationMs).round();
+          final framePath = VideoMetadataService.getCachedFrameAt(item.filePath, tileSourceMs);
+          if (framePath == null) {
+            VideoMetadataService.getFrameAt(item.filePath, tileSourceMs).then((p) {
+              if (p != null && mounted) setState(() {});
+            });
+          }
+          final displayPath = framePath ?? baseThumb;
+          return Expanded(
+            child: displayPath != null && File(displayPath).existsSync()
+                ? Image.file(
+                    File(displayPath),
+                    cacheWidth: 120,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => _buildVideoFallback(),
+                  )
+                : _buildVideoFallback(),
+          );
+        }),
+      );
     }
     return Image.file(
       File(item.filePath),
@@ -95,8 +114,8 @@ class _TimelineClipState extends ConsumerState<TimelineClip> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(2),
                 child: Opacity(
-                  opacity: 0.55,
-                  child: _buildMediaThumbnail(item),
+                  opacity: item.isVideo ? 0.88 : 0.55,
+                  child: _buildMediaThumbnail(item, clipWidth: width),
                 ),
               )
             else

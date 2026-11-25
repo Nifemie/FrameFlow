@@ -1,9 +1,91 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
+import 'ffmpeg_service.dart';
 
 class AudioProbeService {
   static String? _cachedFFprobePath;
+  static final Map<String, List<double>> _waveformCache = {};
+  static final Map<String, Future<List<double>?>> _pendingWaveforms = {};
+  static const int waveformBinsPerSecond = 20;
+
+  static List<double>? getCachedWaveformPeaks(String filePath) => _waveformCache[filePath];
+
+  /// Extracts real normalized PCM amplitude peaks (20 bins/sec = 1 bin per 50ms) via FFmpeg.
+  static Future<List<double>?> getWaveformPeaks(String filePath) async {
+    if (_waveformCache.containsKey(filePath)) return _waveformCache[filePath];
+    if (_pendingWaveforms.containsKey(filePath)) return _pendingWaveforms[filePath];
+
+    final future = _extractWaveformPeaks(filePath);
+    _pendingWaveforms[filePath] = future;
+    try {
+      return await future;
+    } finally {
+      _pendingWaveforms.remove(filePath);
+    }
+  }
+
+  static Future<List<double>?> _extractWaveformPeaks(String filePath) async {
+    if (!File(filePath).existsSync()) return null;
+    final ffmpeg = await FFmpegService.findFFmpeg();
+    if (ffmpeg == null) return null;
+
+    try {
+      const sampleRate = 2000;
+      final proc = await Process.start(ffmpeg, [
+        '-v', 'error',
+        '-i', filePath,
+        '-vn',
+        '-ac', '1',
+        '-ar', '$sampleRate',
+        '-f', 's16le',
+        'pipe:1',
+      ]);
+
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in proc.stdout) {
+        builder.add(chunk);
+      }
+      final exitCode = await proc.exitCode;
+      if (exitCode != 0) return null;
+
+      final bytes = builder.takeBytes();
+      if (bytes.length < 4) return null;
+
+      final evenLen = bytes.length - (bytes.length % 2);
+      final byteData = ByteData.sublistView(bytes, 0, evenLen);
+      final totalSamples = evenLen ~/ 2;
+      const samplesPerBin = sampleRate ~/ waveformBinsPerSecond; // 100 samples = 50ms
+      final binCount = (totalSamples / samplesPerBin).ceil();
+      final peaks = List<double>.filled(binCount, 0.0);
+
+      double globalMax = 0.0;
+      for (int b = 0; b < binCount; b++) {
+        final startSample = b * samplesPerBin;
+        final endSample = (startSample + samplesPerBin).clamp(0, totalSamples);
+        int maxAbs = 0;
+        for (int s = startSample; s < endSample; s++) {
+          final v = byteData.getInt16(s * 2, Endian.little).abs();
+          if (v > maxAbs) maxAbs = v;
+        }
+        final norm = maxAbs / 32768.0;
+        peaks[b] = norm;
+        if (norm > globalMax) globalMax = norm;
+      }
+
+      if (globalMax > 0.01) {
+        for (int b = 0; b < binCount; b++) {
+          peaks[b] = (peaks[b] / globalMax).clamp(0.0, 1.0);
+        }
+      }
+
+      _waveformCache[filePath] = peaks;
+      return peaks;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Locates the ffprobe executable across multiple environments.
   static Future<String?> findFFprobeAsync() async {

@@ -9,14 +9,77 @@ class VideoMetadataService {
   static final Map<String, Size> _dimensionsCache = {};
   static final Map<String, int> _durationCache = {};
   static final Map<String, String> _thumbnailCache = {};
+  static final Map<String, String> _filmstripCache = {};
   static final Map<String, String> _audioTrackCache = {};
   static final Set<String> _pendingThumbnails = {};
+  static final Set<String> _pendingFilmstripKeys = {};
   static final Set<String> _pendingAudioTracks = {};
 
   static Size? getCachedDimensions(String path) => _dimensionsCache[path];
   static int? getCachedDuration(String path) => _durationCache[path];
   static String? getCachedThumbnail(String path) => _thumbnailCache[path];
   static String? getCachedAudioTrack(String path) => _audioTrackCache[path];
+
+  static int bucketTimestampMs(int timestampMs, {int bucketSizeMs = 300}) {
+    if (timestampMs <= 0) return 0;
+    return (timestampMs ~/ bucketSizeMs) * bucketSizeMs;
+  }
+
+  static String? getCachedFrameAt(String videoPath, int timestampMs) {
+    final bucket = bucketTimestampMs(timestampMs);
+    return _filmstripCache['$videoPath#$bucket'];
+  }
+
+  /// Extracts and caches a still frame at [timestampMs] for timeline filmstrips.
+  static Future<String?> getFrameAt(String videoPath, int timestampMs) async {
+    final bucket = bucketTimestampMs(timestampMs);
+    final key = '$videoPath#$bucket';
+
+    if (_filmstripCache.containsKey(key)) {
+      final cached = _filmstripCache[key]!;
+      if (File(cached).existsSync()) return cached;
+    }
+    if (_pendingFilmstripKeys.contains(key)) return null;
+    _pendingFilmstripKeys.add(key);
+
+    try {
+      final ffmpeg = await FFmpegService.findFFmpeg();
+      if (ffmpeg == null) return null;
+
+      final tempDir = await getTemporaryDirectory();
+      final thumbsDir = Directory('${tempDir.path}\\frameflow_thumbs');
+      if (!thumbsDir.existsSync()) thumbsDir.createSync(recursive: true);
+
+      final safeName = p.basenameWithoutExtension(videoPath).replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final framePath = '${thumbsDir.path}\\fs_${safeName}_${videoPath.hashCode.abs()}_$bucket.jpg';
+      final frameFile = File(framePath);
+
+      if (frameFile.existsSync() && frameFile.lengthSync() > 0) {
+        _filmstripCache[key] = framePath;
+        return framePath;
+      }
+
+      final seekSec = (bucket / 1000.0).toStringAsFixed(3);
+      final res = await Process.run(ffmpeg, [
+        '-y',
+        '-ss', seekSec,
+        '-i', videoPath,
+        '-vframes', '1',
+        '-vf', 'scale=128:-1',
+        '-q:v', '5',
+        framePath,
+      ]);
+
+      if (res.exitCode == 0 && frameFile.existsSync() && frameFile.lengthSync() > 0) {
+        _filmstripCache[key] = framePath;
+        return framePath;
+      }
+    } catch (_) {
+    } finally {
+      _pendingFilmstripKeys.remove(key);
+    }
+    return null;
+  }
 
   /// Extracts or returns cached audio stream (m4a/aac) for a video file.
   static Future<String?> getAudioTrackPath(String videoPath) async {
