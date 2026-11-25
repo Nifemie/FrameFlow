@@ -442,16 +442,6 @@ class AudioPropertiesEditor extends ConsumerWidget {
       ),
     );
   }
-
-  Widget _buildTimeRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-        Text(value, style: const TextStyle(fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Colors.white)),
-      ],
-    );
-  }
 }
 
 class _AudioTimestampEditor extends ConsumerStatefulWidget {

@@ -104,7 +104,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                           width: 36,
                           height: 36,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               color: AppColors.accentOrange.withValues(alpha: 0.15),

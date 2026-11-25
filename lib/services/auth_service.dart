@@ -231,7 +231,7 @@ class AuthService {
 
       return true;
     } catch (e) {
-      await server?.close(force: true);
+      await server.close(force: true);
       rethrow;
     }
   }
