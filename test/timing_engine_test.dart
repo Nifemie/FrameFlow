@@ -29,10 +29,10 @@ void main() {
       expect(TimeParser.parseToMs('-5'), isNull);
     });
 
-    test('Formats milliseconds to standard and detailed strings', () {
-      expect(TimeParser.formatStandard(5000), equals('00:05'));
-      expect(TimeParser.formatStandard(308000), equals('05:08'));
-      expect(TimeParser.formatDetailed(5500), equals('00:05.500'));
+    test('Formats milliseconds to MM:SS.ms (00:00.00) strings', () {
+      expect(TimeParser.formatStandard(5000), equals('00:05.00'));
+      expect(TimeParser.formatStandard(308000), equals('05:08.00'));
+      expect(TimeParser.formatDetailed(5500), equals('00:05.50'));
       expect(TimeParser.formatSMPTE(5000, fps: 30), equals('00:00:05:00'));
     });
   });

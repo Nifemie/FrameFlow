@@ -51,42 +51,30 @@ class TimeParser {
     return null;
   }
 
-  /// Formats milliseconds to standard display "MM:SS" or "HH:MM:SS" if >= 1 hour.
+  /// Formats milliseconds to "MM:SS.ms" (00:00.00) or "HH:MM:SS.ms" if >= 1 hour,
+  /// using 2-digit minutes, 2-digit seconds, and 2-digit centiseconds/ms.
   static String formatStandard(int ms) {
-    if (ms < 0) ms = 0;
-    final totalSeconds = ms ~/ 1000;
-    final hours = totalSeconds ~/ 3600;
-    final minutes = (totalSeconds % 3600) ~/ 60;
-    final seconds = totalSeconds % 60;
-
-    final mStr = minutes.toString().padLeft(2, '0');
-    final sStr = seconds.toString().padLeft(2, '0');
-
-    if (hours > 0) {
-      final hStr = hours.toString().padLeft(2, '0');
-      return '$hStr:$mStr:$sStr';
-    }
-    return '$mStr:$sStr';
+    return formatDetailed(ms);
   }
 
-  /// Formats milliseconds to detailed "MM:SS.mmm" or "HH:MM:SS.mmm".
+  /// Formats milliseconds to "MM:SS.ms" (00:00.00) or "HH:MM:SS.ms" if >= 1 hour.
   static String formatDetailed(int ms) {
     if (ms < 0) ms = 0;
     final totalSeconds = ms ~/ 1000;
-    final milliseconds = ms % 1000;
+    final centiseconds = (ms % 1000) ~/ 10;
     final hours = totalSeconds ~/ 3600;
     final minutes = (totalSeconds % 3600) ~/ 60;
     final seconds = totalSeconds % 60;
 
     final mStr = minutes.toString().padLeft(2, '0');
     final sStr = seconds.toString().padLeft(2, '0');
-    final msStr = milliseconds.toString().padLeft(3, '0');
+    final csStr = centiseconds.toString().padLeft(2, '0');
 
     if (hours > 0) {
       final hStr = hours.toString().padLeft(2, '0');
-      return '$hStr:$mStr:$sStr.$msStr';
+      return '$hStr:$mStr:$sStr.$csStr';
     }
-    return '$mStr:$sStr.$msStr';
+    return '$mStr:$sStr.$csStr';
   }
 
   /// Formats milliseconds to SMPTE timecode: "HH:MM:SS:FF" based on FPS.
