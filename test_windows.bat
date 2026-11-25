@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableDelayedExpansion
-title FrameFlow Studio - Windows Diagnostics & Test Runner
+title FrameFlow Studio - Windows Diagnostics ^& Test Runner
 
 :: Ensure script is running inside FrameFlow directory
 cd /d "%~dp0"
@@ -16,7 +16,7 @@ if not exist "pubspec.yaml" (
 
 cls
 echo ===============================================================================
-echo                 FrameFlow Studio - Windows Test & Launch Tool
+echo                 FrameFlow Studio - Windows Test ^& Launch Tool
 echo ===============================================================================
 echo.
 
@@ -113,10 +113,10 @@ echo.
 echo ===============================================================================
 echo                                 Action Menu
 echo ===============================================================================
-echo  [1] Re-run Unit Tests & Code Analysis
+echo  [1] Re-run Unit Tests ^& Code Analysis
 echo  [2] Launch FrameFlow App in Windows Desktop Mode (flutter run -d windows)
 echo  [3] Build Release Windows Executable (flutter build windows --release)
-echo  [4] Clean & Refresh Dependencies (flutter clean ^&^& flutter pub get)
+echo  [4] Clean ^& Refresh Dependencies (flutter clean ^&^& flutter pub get)
 echo  [5] Exit
 echo ===============================================================================
 set /p USER_CHOICE="Select an option (1-5): "
