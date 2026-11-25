@@ -11,6 +11,7 @@ import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../services/playback_controller.dart';
+import '../../../services/timeline_arrangement_service.dart';
 import '../media/widgets/folder_import_dialog.dart';
 import 'services/timeline_zoom_controller.dart';
 import 'widgets/audio_waveform_strip.dart';
@@ -57,7 +58,33 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
     });
   }
 
-  void _handleSeek(int ms) => ref.read(playbackControllerProvider).seek(ms);
+  (int, int?) _snapPlayheadMs(int rawMs, double pxPerSec) {
+    final snapOn = ref.read(snappingEnabledProvider);
+    if (!snapOn) return (rawMs, null);
+    final project = ref.read(projectProvider);
+    final targets = <int>[
+      0,
+      if (project.totalDurationMs > 0) project.totalDurationMs,
+      ...project.markers.map((m) => m.timestampMs),
+      ...project.images.expand((i) => [i.startMs, i.endMs]),
+      ...project.textOverlays.expand((t) => [t.startMs, t.endMs]),
+      ...project.effectiveAudioClips.expand((a) => [a.startTimelineMs, a.endTimelineMs]),
+    ];
+    return TimelineArrangementService.snapToTargets(
+      targetMs: rawMs,
+      targets: targets,
+      pxPerSec: pxPerSec,
+      enabled: true,
+    );
+  }
+
+  void _handleSeek(int ms) {
+    final zoom = ref.read(timelineZoomProvider);
+    final pxPerSec = TimelineZoomController.pxPerSec(zoom);
+    final (snapped, _) = _snapPlayheadMs(ms, pxPerSec);
+    ref.read(playbackControllerProvider).seek(snapped);
+  }
+
   void _handleNeedleDragStart(DragStartDetails d, int ms, double pxPerSec) {
     ref.read(playbackControllerProvider).pause();
     _dragCurrentPlayheadX = (ms / 1000.0) * pxPerSec;
@@ -66,7 +93,10 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
   void _handleNeedleDragUpdate(DragUpdateDetails d, double pxPerSec, int totalMs) {
     _dragCurrentPlayheadX += d.delta.dx;
     final maxMs = max(totalMs, ref.read(projectProvider).totalDurationMs);
-    ref.read(playbackControllerProvider).scrub(((_dragCurrentPlayheadX / pxPerSec) * 1000).round().clamp(0, maxMs));
+    final rawMs = ((_dragCurrentPlayheadX / pxPerSec) * 1000).round().clamp(0, maxMs);
+    final (snappedMs, snapLine) = _snapPlayheadMs(rawMs, pxPerSec);
+    ref.read(activeSnapLineMsProvider.notifier).state = snapLine;
+    ref.read(playbackControllerProvider).scrub(snappedMs.clamp(0, maxMs));
     if (_scrollController.hasClients) {
       final off = _scrollController.offset, viewW = _scrollController.position.viewportDimension;
       if (_dragCurrentPlayheadX > off + viewW - 40) _scrollController.jumpTo((off + 15).clamp(0.0, _scrollController.position.maxScrollExtent));
@@ -75,6 +105,7 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
   }
 
   void _handleNeedleDragEnd() {
+    ref.read(activeSnapLineMsProvider.notifier).state = null;
     final ms = ref.read(playheadPositionProvider);
     ref.read(playbackControllerProvider).seek(ms, syncAudioImmediately: true);
   }
@@ -126,7 +157,10 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
 
   Future<void> _pickImagesForTrack(String trackId) async {
     final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: [...AppConstants.supportedImageExtensions, ...AppConstants.supportedVideoExtensions], allowMultiple: true);
-    if (result != null) ref.read(projectProvider.notifier).addImages(result.paths.whereType<String>().toList(), trackId: trackId);
+    if (result != null) {
+      final playheadMs = ref.read(playheadPositionProvider);
+      ref.read(projectProvider.notifier).addImages(result.paths.whereType<String>().toList(), trackId: trackId, insertAtMs: playheadMs);
+    }
   }
 
   Future<void> _pickFolderForTrack(String trackId) async {
@@ -138,7 +172,8 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
         directoryPath: folderPath,
         onImportConfirmed: (paths, stamps) {
           if (paths.isEmpty) return;
-          ref.read(projectProvider.notifier).addImages(paths, trackId: trackId);
+          final playheadMs = ref.read(playheadPositionProvider);
+          ref.read(projectProvider.notifier).addImages(paths, trackId: trackId, insertAtMs: playheadMs);
           if (stamps.isNotEmpty) ref.read(projectProvider.notifier).applyBulkTimestamps(stamps, trackId: trackId);
         },
       ),

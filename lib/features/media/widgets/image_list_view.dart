@@ -43,8 +43,10 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
 
   void _addPaths(List<String> paths, [List<String>? timestamps]) {
     if (paths.isEmpty) return;
-    ref.read(projectProvider.notifier).addImages(paths, trackId: _targetTrack);
-    if (timestamps != null && timestamps.isNotEmpty) ref.read(projectProvider.notifier).applyBulkTimestamps(timestamps);
+    final targetTrack = _targetTrack == 'all' ? 'track_v1' : _targetTrack;
+    final playheadMs = ref.read(playheadPositionProvider);
+    ref.read(projectProvider.notifier).addImages(paths, trackId: targetTrack, insertAtMs: playheadMs);
+    if (timestamps != null && timestamps.isNotEmpty) ref.read(projectProvider.notifier).applyBulkTimestamps(timestamps, trackId: targetTrack);
     if (ref.read(selectedImageIdProvider) == null) {
       final images = ref.read(projectProvider).images;
       if (images.isNotEmpty) ref.read(selectedImageIdProvider.notifier).state = images.first.id;

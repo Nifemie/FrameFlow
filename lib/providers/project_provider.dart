@@ -37,11 +37,84 @@ class ProjectNotifier extends StateNotifier<Project> {
   bool redo() { final n = _undoRedo.redo(state); if (n != null) { state = n; return true; } return false; }
   void setProjectName(String name) { _undoRedo.recordSnapshot(state); state = state.copyWith(name: name); }
 
-  void addImages(List<String> paths, {String trackId = 'track_v1'}) {
+  void addImages(List<String> paths, {String trackId = 'track_v1', int? insertAtMs}) {
     if (paths.isEmpty) return;
     _undoRedo.recordSnapshot(state);
-    final items = paths.map((path) => ImageItem(id: _uuid.v4(), filePath: path, displayName: p.basename(path), orderIndex: state.images.length, trackId: trackId)).toList();
-    state = state.copyWith(images: TimingEngine.calculateSequence(images: [...state.images, ...items], voiceOverDurationMs: state.voiceOver?.durationMs));
+
+    final trackClips = state.images.where((i) => i.trackId == trackId).toList()
+      ..sort((a, b) => a.startMs.compareTo(b.startMs));
+    final otherClips = state.images.where((i) => i.trackId != trackId).toList();
+
+    List<ImageItem> combinedTrack;
+    if (insertAtMs == null) {
+      final items = paths.map((path) => ImageItem(
+        id: _uuid.v4(), filePath: path, displayName: p.basename(path),
+        orderIndex: trackClips.length, trackId: trackId,
+      )).toList();
+      combinedTrack = [...trackClips, ...items];
+    } else {
+      final clampedAt = insertAtMs.clamp(0, 36000000);
+      const defaultDur = TimingEngine.defaultImageDurationMs;
+      final newItems = <ImageItem>[];
+      int cursorMs = clampedAt;
+      for (int i = 0; i < paths.length; i++) {
+        final path = paths[i];
+        newItems.add(ImageItem(
+          id: _uuid.v4(),
+          filePath: path,
+          displayName: p.basename(path),
+          orderIndex: 0,
+          trackId: trackId,
+          startMs: cursorMs,
+          endMs: cursorMs + defaultDur,
+          durationMs: defaultDur,
+          userStartTimestampInput: (cursorMs / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: ((cursorMs + defaultDur) / 1000.0).toStringAsFixed(2),
+        ));
+        cursorMs += defaultDur;
+      }
+
+      final totalAddedDur = newItems.length * defaultDur;
+      final adjustedExisting = <ImageItem>[];
+      for (final existing in trackClips) {
+        if (existing.endMs <= clampedAt) {
+          // Before insertion point: keep exact position
+          adjustedExisting.add(existing.copyWith(
+            userStartTimestampInput: existing.userStartTimestampInput ?? (existing.startMs / 1000.0).toStringAsFixed(2),
+            userEndTimestampInput: existing.userEndTimestampInput ?? (existing.endMs / 1000.0).toStringAsFixed(2),
+          ));
+        } else if (existing.startMs >= clampedAt + totalAddedDur) {
+          // After inserted items with enough blank space: keep exact position
+          adjustedExisting.add(existing.copyWith(
+            userStartTimestampInput: existing.userStartTimestampInput ?? (existing.startMs / 1000.0).toStringAsFixed(2),
+            userEndTimestampInput: existing.userEndTimestampInput ?? (existing.endMs / 1000.0).toStringAsFixed(2),
+          ));
+        } else {
+          // Overlaps insertion range: shift right so inserted asset fits cleanly at playhead
+          final shift = (clampedAt + totalAddedDur) - existing.startMs;
+          final ns = existing.startMs + shift;
+          final ne = existing.endMs + shift;
+          adjustedExisting.add(existing.copyWith(
+            startMs: ns,
+            endMs: ne,
+            userStartTimestampInput: (ns / 1000.0).toStringAsFixed(2),
+            userEndTimestampInput: (ne / 1000.0).toStringAsFixed(2),
+          ));
+        }
+      }
+
+      combinedTrack = [...adjustedExisting, ...newItems]
+        ..sort((a, b) => a.startMs.compareTo(b.startMs));
+    }
+
+    final items = combinedTrack.where((i) => paths.contains(i.filePath)).toList();
+    state = state.copyWith(
+      images: TimingEngine.calculateSequence(
+        images: [...otherClips, ...combinedTrack],
+        voiceOverDurationMs: state.voiceOver?.durationMs,
+        snapFinalImageToAudio: insertAtMs == null && state.timingMode == TimingMode.automatic,
+      ),
+    );
 
     for (final item in items) {
       if (item.isVideo) {
@@ -49,7 +122,6 @@ class ProjectNotifier extends StateNotifier<Project> {
           if (durMs > 0) {
             final current = state.images.where((img) => img.id == item.id).firstOrNull;
             if (current != null) {
-              // Store sourceDurationMs and set initial timeline duration without creating a second undo step
               final withSource = state.images.map((img) => img.id == item.id ? img.copyWith(sourceDurationMs: durMs) : img).toList();
               state = state.copyWith(images: withSource);
               final newEnd = current.startMs + durMs;
@@ -63,8 +135,24 @@ class ProjectNotifier extends StateNotifier<Project> {
     }
   }
 
-  void addColorBackground({Color color = const Color(0xFF1E293B), int durationMs = 3000, int? targetIndex, String trackId = 'track_v1'}) {
+  void addColorBackground({Color color = const Color(0xFF1E293B), int durationMs = 3000, int? targetIndex, String trackId = 'track_v1', int? insertAtMs}) {
     _undoRedo.recordSnapshot(state);
+    if (insertAtMs != null) {
+      final clampedAt = insertAtMs.clamp(0, 36000000);
+      final item = ImageItem(
+        id: _uuid.v4(), filePath: 'color_background', displayName: 'Color BG',
+        orderIndex: 0, startMs: clampedAt, endMs: clampedAt + durationMs, durationMs: durationMs,
+        userStartTimestampInput: (clampedAt / 1000.0).toStringAsFixed(2),
+        userEndTimestampInput: ((clampedAt + durationMs) / 1000.0).toStringAsFixed(2),
+        backgroundColorValue: color.toARGB32(), trackId: trackId,
+      );
+      final trackClips = state.images.where((i) => i.trackId == trackId).toList()
+        ..add(item)
+        ..sort((a, b) => a.startMs.compareTo(b.startMs));
+      final otherClips = state.images.where((i) => i.trackId != trackId).toList();
+      state = state.copyWith(images: TimingEngine.calculateSequence(images: [...otherClips, ...trackClips], voiceOverDurationMs: state.voiceOver?.durationMs, snapFinalImageToAudio: false));
+      return;
+    }
     final idx = (targetIndex ?? state.images.length).clamp(0, state.images.length);
     final item = ImageItem(
       id: _uuid.v4(), filePath: 'color_background', displayName: 'Color BG',

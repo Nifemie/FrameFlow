@@ -7,6 +7,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/natural_sort.dart';
 import '../../providers/project_provider.dart';
+import '../../providers/selection_provider.dart';
 import '../../services/audio_probe_service.dart';
 import 'widgets/audio_drop_card.dart';
 import 'widgets/image_list_view.dart';
@@ -52,7 +53,8 @@ class MediaPanel extends ConsumerWidget {
     }
 
     if (mediaPaths.isNotEmpty) {
-      ref.read(projectProvider.notifier).addImages(mediaPaths);
+      final playheadMs = ref.read(playheadPositionProvider);
+      ref.read(projectProvider.notifier).addImages(mediaPaths, insertAtMs: playheadMs);
     }
     for (final a in audioPaths) {
       AudioProbeService.getAudioDurationMs(a).then((durationMs) {

@@ -24,7 +24,10 @@ class TrackHeaderColumn extends ConsumerWidget {
       allowedExtensions: [...AppConstants.supportedImageExtensions, ...AppConstants.supportedVideoExtensions],
       allowMultiple: true,
     );
-    if (result != null) ref.read(projectProvider.notifier).addImages(result.paths.whereType<String>().toList(), trackId: trackId);
+    if (result != null) {
+      final playheadMs = ref.read(playheadPositionProvider);
+      ref.read(projectProvider.notifier).addImages(result.paths.whereType<String>().toList(), trackId: trackId, insertAtMs: playheadMs);
+    }
   }
 
   @override
@@ -118,7 +121,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                         }
                       : null,
                   onAddMedia: isVideo ? () => _pickMedia(ref, tr.id) : null,
-                  onAddBg: isVideo ? () => notifier.addColorBackground(trackId: tr.id) : null,
+                  onAddBg: isVideo ? () => notifier.addColorBackground(trackId: tr.id, insertAtMs: ref.read(playheadPositionProvider)) : null,
                   onAutoArrange: isVideo ? () => notifier.autoArrangeFromLeft(trackId: tr.id) : null,
                   onSecondaryTapUp: (details) => AssetContextMenus.showTimelineMenu(
                     context: context,
@@ -126,7 +129,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                     globalPosition: details.globalPosition,
                     track: tr,
                     onAddMedia: isVideo ? () => _pickMedia(ref, tr.id) : null,
-                    onAddBg: isVideo ? () => notifier.addColorBackground(trackId: tr.id) : null,
+                    onAddBg: isVideo ? () => notifier.addColorBackground(trackId: tr.id, insertAtMs: ref.read(playheadPositionProvider)) : null,
                   ),
                   onTimestamp: (isVideo || tr.type == TrackType.audio)
                       ? () => showDialog(

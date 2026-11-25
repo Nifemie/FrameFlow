@@ -193,5 +193,26 @@ void main() {
       expect(res[1].startMs, equals(7000));
       expect(res[1].endMs, equals(15000));
     });
+
+    test('Adding an asset with insertAtMs inserts at playhead instead of end', () {
+      final notifier = ProjectNotifier();
+      notifier.addImages(['a.jpg'], insertAtMs: 0); // 0..5000ms
+      // Playhead is at 10000ms (10s) on track_v1 -> leaves 5s..10s blank and places b.jpg at 10s..15s
+      notifier.addImages(['b.jpg'], insertAtMs: 10000);
+      expect(notifier.state.images.length, equals(2));
+      expect(notifier.state.images[0].startMs, equals(0));
+      expect(notifier.state.images[0].endMs, equals(5000));
+      expect(notifier.state.images[1].startMs, equals(10000));
+      expect(notifier.state.images[1].endMs, equals(15000));
+
+      // Playhead is at 5000ms (inside 5s..10s blank) -> places c.jpg at 5s..10s
+      notifier.addImages(['c.jpg'], insertAtMs: 5000);
+      expect(notifier.state.images.length, equals(3));
+      expect(notifier.state.images[1].displayName, equals('c.jpg'));
+      expect(notifier.state.images[1].startMs, equals(5000));
+      expect(notifier.state.images[1].endMs, equals(10000));
+      expect(notifier.state.images[2].displayName, equals('b.jpg'));
+      expect(notifier.state.images[2].startMs, equals(10000));
+    });
   });
 }
