@@ -451,22 +451,31 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                               children: [
                                                 for (final tr in tracks) ...[
                                                   if (tr.isVideoOrBg) ...[
-                                                    MediaTrackStrip(
-                                                      track: tr,
-                                                      images: project.imagesForTrack(tr.id),
-                                                      contentWidth: contentWidth,
-                                                      pxPerSec: pxPerSec,
-                                                      zoom: zoom,
-                                                      emptyLabel: '+ Add Videos / Images / BG to ${tr.name}',
-                                                      onAdd: () => _pickImagesForTrack(tr.id),
-                                                      onAddFolder: () => _pickFolderForTrack(tr.id),
+                                                    Opacity(
+                                                      opacity: tr.isVisible ? 1.0 : 0.32,
+                                                      child: MediaTrackStrip(
+                                                        track: tr,
+                                                        images: project.imagesForTrack(tr.id),
+                                                        contentWidth: contentWidth,
+                                                        pxPerSec: pxPerSec,
+                                                        zoom: zoom,
+                                                        emptyLabel: '+ Add Videos / Images / BG to ${tr.name}',
+                                                        onAdd: () => _pickImagesForTrack(tr.id),
+                                                        onAddFolder: () => _pickFolderForTrack(tr.id),
+                                                      ),
                                                     ),
                                                     const SizedBox(height: 4),
                                                   ] else if (tr.type == TrackType.text) ...[
-                                                    TextTimelineStrip(pxPerSec: pxPerSec, contentWidth: contentWidth),
+                                                    Opacity(
+                                                      opacity: tr.isVisible ? 1.0 : 0.32,
+                                                      child: TextTimelineStrip(pxPerSec: pxPerSec, contentWidth: contentWidth),
+                                                    ),
                                                     const SizedBox(height: 4),
                                                   ] else if (tr.type == TrackType.audio) ...[
-                                                    AudioWaveformStrip(pxPerSec: pxPerSec, contentWidth: contentWidth),
+                                                    Opacity(
+                                                      opacity: tr.isVisible ? 1.0 : 0.32,
+                                                      child: AudioWaveformStrip(pxPerSec: pxPerSec, contentWidth: contentWidth),
+                                                    ),
                                                     const SizedBox(height: 4),
                                                   ],
                                                 ],

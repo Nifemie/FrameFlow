@@ -161,60 +161,85 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                   onReorder: (oldIndex, newIndex) {
                     final item = displayedImages[oldIndex];
                     final rawOld = allImages.indexOf(item);
-                    final targetItem = newIndex < displayedImages.length ? displayedImages[newIndex] : displayedImages.last;
-                    final rawNew = allImages.indexOf(targetItem);
+                    final rawNew = newIndex >= displayedImages.length
+                        ? allImages.length
+                        : allImages.indexOf(displayedImages[newIndex]);
                     if (rawOld >= 0 && rawNew >= 0) ref.read(projectProvider.notifier).reorderImages(rawOld, rawNew);
                   },
                   itemBuilder: (context, index) {
                     final item = displayedImages[index];
-                    return Draggable<ImageItem>(
+                    return DragTarget<ImageItem>(
                       key: ValueKey(item.id),
-                      data: item,
-                      feedback: Material(
-                        color: Colors.transparent,
-                        child: Opacity(
-                          opacity: 0.85,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: AppColors.accentOrange, width: 1.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.accentOrange.withValues(alpha: 0.35),
-                                  blurRadius: 8,
+                      onWillAcceptWithDetails: (details) => details.data.id != item.id,
+                      onAcceptWithDetails: (details) {
+                        final draggedIdx = displayedImages.indexWhere((i) => i.id == details.data.id);
+                        final insertBefore = draggedIdx < 0 || draggedIdx > index;
+                        ref.read(projectProvider.notifier).reorderAndOccupy(
+                          details.data.id,
+                          item.id,
+                          insertBefore: insertBefore,
+                        );
+                      },
+                      builder: (context, candidateData, _) {
+                        final isDropHover = candidateData.isNotEmpty;
+                        return Container(
+                          decoration: isDropHover
+                              ? BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(color: AppColors.accentOrange, width: 2),
+                                  ),
+                                )
+                              : null,
+                          child: Draggable<ImageItem>(
+                            data: item,
+                            feedback: Material(
+                              color: Colors.transparent,
+                              child: Opacity(
+                                opacity: 0.85,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: AppColors.accentOrange, width: 1.5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.accentOrange.withValues(alpha: 0.35),
+                                        blurRadius: 8,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(item.isVideo ? Icons.videocam_rounded : Icons.image_rounded, size: 14, color: AppColors.accentOrange),
+                                      const SizedBox(width: 6),
+                                      Text(item.displayName, style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
                                 ),
-                              ],
+                              ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(item.isVideo ? Icons.videocam_rounded : Icons.image_rounded, size: 14, color: AppColors.accentOrange),
-                                const SizedBox(width: 6),
-                                Text(item.displayName, style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
-                              ],
+                            child: GestureDetector(
+                              onSecondaryTapUp: (details) => AssetContextMenus.showMediaClipMenu(
+                                context: context,
+                                ref: ref,
+                                globalPosition: details.globalPosition,
+                                item: item,
+                              ),
+                              child: ImageCard(
+                                item: item,
+                                isSelected: item.id == selectedId,
+                                onTap: () => SelectionHelper.selectImage(ref, item.id),
+                                onRemove: () {
+                                  ref.read(projectProvider.notifier).removeImage(item.id);
+                                  if (selectedId == item.id) SelectionHelper.clearAll(ref);
+                                },
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      child: GestureDetector(
-                        onSecondaryTapUp: (details) => AssetContextMenus.showMediaClipMenu(
-                          context: context,
-                          ref: ref,
-                          globalPosition: details.globalPosition,
-                          item: item,
-                        ),
-                        child: ImageCard(
-                          item: item,
-                          isSelected: item.id == selectedId,
-                          onTap: () => SelectionHelper.selectImage(ref, item.id),
-                          onRemove: () {
-                            ref.read(projectProvider.notifier).removeImage(item.id);
-                            if (selectedId == item.id) SelectionHelper.clearAll(ref);
-                          },
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
                 ),

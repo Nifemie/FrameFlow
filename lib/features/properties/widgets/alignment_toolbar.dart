@@ -125,8 +125,8 @@ class AlignmentToolbar extends ConsumerWidget {
             ),
             const SizedBox(width: 4),
             _btn(
-              icon: Icons.center_focus_strong_rounded,
-              tooltip: 'Center on Canvas (Both Axes)',
+              icon: Icons.add,
+              tooltip: 'Align Center (Both Vertical & Horizontal)',
               onTap: () => _applyAlignment(ref, AlignmentType.centerCanvas),
             ),
           ],

@@ -159,9 +159,11 @@ class TrackHeaderColumn extends ConsumerWidget {
   }) {
     return GestureDetector(
       onSecondaryTapUp: onSecondaryTapUp,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
+      child: Opacity(
+        opacity: isVisible ? 1.0 : 0.48,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(4),
       child: Container(
         height: height, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(4), border: Border.all(color: AppColors.surfaceBorder, width: 0.5)),
@@ -228,6 +230,7 @@ class TrackHeaderColumn extends ConsumerWidget {
           ],
         ],
       ),
+    ),
     ),
     ),
   );
