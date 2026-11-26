@@ -756,6 +756,16 @@ class ProjectNotifier extends StateNotifier<Project> {
     state = state.copyWith(tracks: [...current, TimelineTrackItem(id: 'track_${_uuid.v4().substring(0, 8)}', name: name, type: type, orderIndex: current.length)]);
   }
 
+  void renameTrack(String trackId, String newName) {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+    _undoRedo.recordSnapshot(state);
+    final updated = state.effectiveTracks
+        .map((t) => t.id == trackId ? t.copyWith(name: trimmed) : t)
+        .toList();
+    state = state.copyWith(tracks: updated);
+  }
+
   void removeTrack(String trackId) {
     _undoRedo.recordSnapshot(state);
     final target = state.effectiveTracks.where((t) => t.id == trackId).firstOrNull;

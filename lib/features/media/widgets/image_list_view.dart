@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/image_item.dart';
-import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../timeline/widgets/asset_context_menus.dart';
@@ -61,9 +60,7 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
     final videoTracks = project.effectiveTracks.where((t) => t.isVideoOrBg).toList();
     final displayedImages = _targetTrack == 'all' ? allImages : allImages.where((i) => i.trackId == _targetTrack).toList();
 
-    Color btnColor = _targetTrack == 'track_bg' ? Colors.purpleAccent : AppColors.accentOrange;
-    final activeTrack = videoTracks.where((t) => t.id == _targetTrack).firstOrNull;
-    if (activeTrack != null && activeTrack.type == TrackType.overlayVideo) btnColor = Colors.cyanAccent;
+    const Color btnColor = AppColors.accentOrange;
 
     return Column(
       children: [
@@ -114,7 +111,7 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                     ),
                     onPressed: _pickImages,
                     icon: const Icon(Icons.add_photo_alternate, size: 13),
-                    label: Text(activeTrack != null && activeTrack.type == TrackType.overlayVideo ? 'Add (V2)' : 'Add'),
+                    label: const Text('Add'),
                   ),
                 ],
               ),
@@ -130,8 +127,8 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                 for (final tr in videoTracks) ...[
                   _buildFilterChip(
                     tr.id,
-                    '${tr.name.split(' ').first} (${allImages.where((i) => i.trackId == tr.id).length})',
-                    tr.type == TrackType.overlayVideo ? Colors.cyanAccent : (tr.type == TrackType.backgroundUnderlay ? Colors.purpleAccent : AppColors.accentOrange),
+                    '${tr.name} (${allImages.where((i) => i.trackId == tr.id).length})',
+                    AppColors.accentOrange,
                   ),
                   const SizedBox(width: 4),
                 ],

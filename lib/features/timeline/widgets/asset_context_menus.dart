@@ -389,6 +389,10 @@ class AssetContextMenus {
             child: Row(children: [Icon(Icons.format_align_left, size: 15, color: Colors.cyanAccent), SizedBox(width: 8), Text('Auto-Rearrange from Left (Pack)', style: TextStyle(fontSize: 12, color: Colors.white))]),
           ),
         const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'rename_track',
+          child: Row(children: [Icon(Icons.edit, size: 15, color: AppColors.accentOrange), SizedBox(width: 8), Text('Rename Timeline...', style: TextStyle(fontSize: 12, color: Colors.white))]),
+        ),
         PopupMenuItem(
           value: 'toggle_vis',
           child: Row(children: [
@@ -449,6 +453,9 @@ class AssetContextMenus {
         break;
       case 'pack_left':
         notifier.autoArrangeFromLeft(trackId: track.id);
+        break;
+      case 'rename_track':
+        showRenameTrackDialog(context, ref, track);
         break;
       case 'toggle_vis':
         notifier.toggleTrackVisibility(track.id);
@@ -512,6 +519,42 @@ class AssetContextMenus {
               }
             },
             child: const Text('Create Blank'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static void showRenameTrackDialog(BuildContext context, WidgetRef ref, TimelineTrackItem track) {
+    final ctrl = TextEditingController(text: track.name);
+    void submit(BuildContext ctx) {
+      final name = ctrl.text.trim();
+      if (name.isNotEmpty) {
+        ref.read(projectProvider.notifier).renameTrack(track.id, name);
+      }
+      Navigator.pop(ctx);
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Rename Timeline', style: TextStyle(fontSize: 14, color: Colors.white)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(fontSize: 13, color: Colors.white),
+          decoration: const InputDecoration(
+            labelText: 'Timeline Name',
+            hintText: 'e.g. Assets 1, B-Roll, Background',
+          ),
+          onSubmitted: (_) => submit(ctx),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => submit(ctx),
+            child: const Text('Save'),
           ),
         ],
       ),

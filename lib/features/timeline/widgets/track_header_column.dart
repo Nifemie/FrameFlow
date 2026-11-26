@@ -95,11 +95,12 @@ class TrackHeaderColumn extends ConsumerWidget {
               itemBuilder: (context, idx) {
                 final tr = tracks[idx];
                 final isVideo = tr.isVideoOrBg;
-                final badgeColor = tr.type == TrackType.overlayVideo ? Colors.cyanAccent : (tr.type == TrackType.backgroundUnderlay ? Colors.purpleAccent : (tr.type == TrackType.text ? Colors.amber : (tr.type == TrackType.audio ? AppColors.waveform : AppColors.clipBlue)));
+                final badgeColor = tr.type == TrackType.overlayVideo ? AppColors.accentOrange : (tr.type == TrackType.backgroundUnderlay ? Colors.purpleAccent : (tr.type == TrackType.text ? Colors.amber : (tr.type == TrackType.audio ? AppColors.waveform : AppColors.clipBlue)));
 
                 return _buildRow(
                   context: context, label: tr.name, height: isVideo ? 64 : (tr.type == TrackType.text ? 32 : 38),
                   isVisible: tr.isVisible, isMuted: tr.isMuted, badgeColor: badgeColor,
+                  onRename: () => AssetContextMenus.showRenameTrackDialog(context, ref, tr),
                   onTap: () {
                     if (tr.type == TrackType.audio) {
                       final clips = ref.read(projectProvider).effectiveAudioClips;
@@ -155,7 +156,7 @@ class TrackHeaderColumn extends ConsumerWidget {
     required BuildContext context, required String label, required double height, required bool isVisible,
     required bool isMuted, required Color badgeColor, required VoidCallback onToggleVis, VoidCallback? onToggleMute,
     VoidCallback? onAddMedia, VoidCallback? onAddBg, VoidCallback? onAutoArrange, VoidCallback? onTimestamp, VoidCallback? onDelete,
-    VoidCallback? onTap, void Function(TapUpDetails)? onSecondaryTapUp,
+    VoidCallback? onTap, VoidCallback? onRename, void Function(TapUpDetails)? onSecondaryTapUp,
   }) {
     return GestureDetector(
       onSecondaryTapUp: onSecondaryTapUp,
@@ -174,7 +175,15 @@ class TrackHeaderColumn extends ConsumerWidget {
             children: [
               Container(width: 3, height: 12, decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(1.5))),
               const SizedBox(width: 4),
-              Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white))),
+              Expanded(
+                child: GestureDetector(
+                  onDoubleTap: onRename,
+                  child: Tooltip(
+                    message: '$label (Double-click to rename)',
+                    child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ),
+                ),
+              ),
               IconButton(icon: Icon(isVisible ? Icons.visibility : Icons.visibility_off, size: 13, color: isVisible ? AppColors.textPrimary : AppColors.textMuted), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onToggleVis),
               if (height <= 40 && onTimestamp != null) ...[
                 const SizedBox(width: 4),
