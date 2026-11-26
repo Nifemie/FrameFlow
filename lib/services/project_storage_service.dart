@@ -8,6 +8,7 @@ import '../models/audio_clip_item.dart';
 import '../models/image_item.dart';
 import '../models/project.dart';
 import '../models/text_overlay_item.dart';
+import '../models/timeline_gap.dart';
 import '../models/timeline_marker.dart';
 import '../models/voice_over.dart';
 import 'timing_engine.dart';
@@ -54,6 +55,7 @@ class ProjectStorageService {
       }).toList(),
       'textOverlays': project.textOverlays.map((t) => t.toJson()).toList(),
       'markers': project.markers.map((m) => m.toMap()).toList(),
+      'explicitGaps': project.explicitGaps.map((g) => g.toMap()).toList(),
     };
   }
 
@@ -142,6 +144,10 @@ class ProjectStorageService {
       return TimelineMarker.fromMap(m as Map<String, dynamic>);
     }).toList();
 
+    final explicitGaps = (map['explicitGaps'] as List<dynamic>? ?? []).map((g) {
+      return TimelineGap.fromMap(g as Map<String, dynamic>);
+    }).toList();
+
     return Project(
       id: map['id'] as String,
       name: map['name'] as String? ?? 'Untitled Project',
@@ -150,6 +156,7 @@ class ProjectStorageService {
       audioClips: audioClips,
       textOverlays: textOverlays,
       markers: markers,
+      explicitGaps: explicitGaps,
       scriptText: map['scriptText'] as String?,
       timingMode: timingMode,
       aspectRatio: ratio,

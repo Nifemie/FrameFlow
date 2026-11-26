@@ -37,19 +37,19 @@ class MediaTrackStrip extends ConsumerWidget {
   });
 
   List<Widget> _buildGaps(WidgetRef ref) {
-    final list = <Widget>[];
-    int lastEnd = 0;
-    for (final img in images) {
-      if (img.startMs > lastEnd + 100) {
-        list.add(TimelineGapItem(
-          startMs: lastEnd, endMs: img.startMs, pxPerSec: pxPerSec,
-          trackId: img.trackId,
-          onTap: () => ref.read(playbackControllerProvider).seek(lastEnd),
-        ));
-      }
-      lastEnd = img.endMs;
-    }
-    return list;
+    final explicitGaps = ref.watch(projectProvider.select((p) => p.explicitGaps));
+    return explicitGaps
+        .where((g) => g.trackId == track.id && g.durationMs > 100)
+        .map((g) => TimelineGapItem(
+              key: ValueKey('gap_${g.id}'),
+              gapId: g.id,
+              startMs: g.startMs,
+              endMs: g.endMs,
+              pxPerSec: pxPerSec,
+              trackId: g.trackId,
+              onTap: () => ref.read(playbackControllerProvider).seek(g.startMs),
+            ))
+        .toList();
   }
 
   int _computeDropStartMs(BuildContext context, WidgetRef ref, Offset globalOffset) {

@@ -231,6 +231,26 @@ void main() {
       expect(onAssets.first.startMs, equals(12000));
       expect(onAssets.first.durationMs, equals(5000));
       expect(onAssets.first.endMs, equals(17000));
+      // Moving/placing does NOT auto-create blanks
+      expect(notifier.state.explicitGaps, isEmpty);
+    });
+
+    test('Blanks only exist when deleting a clip in-place or via createBlankAtPlayhead', () {
+      final notifier = ProjectNotifier();
+      notifier.addImages(['a.jpg', 'b.jpg'], insertAtMs: 0);
+      expect(notifier.state.explicitGaps, isEmpty);
+
+      // 1. Delete clip A preserving blank -> creates explicit gap 0..5000
+      final aId = notifier.state.images.first.id;
+      notifier.removeClipsPreservingGaps({aId});
+      expect(notifier.state.explicitGaps.length, equals(1));
+      expect(notifier.state.explicitGaps.first.startMs, equals(0));
+      expect(notifier.state.explicitGaps.first.endMs, equals(5000));
+
+      // 2. Create blank at 5000ms (3000ms) -> creates second explicit gap and shifts B
+      notifier.createBlankAtPlayhead('track_v1', 5000, durationMs: 3000);
+      expect(notifier.state.explicitGaps.length, equals(2));
+      expect(notifier.state.images.first.startMs, equals(8000));
     });
   });
 }

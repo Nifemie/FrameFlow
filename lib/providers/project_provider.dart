@@ -11,6 +11,7 @@ import '../models/audio_clip_item.dart';
 import '../models/image_item.dart';
 import '../models/project.dart';
 import '../models/text_overlay_item.dart';
+import '../models/timeline_gap.dart';
 import '../models/timeline_marker.dart';
 import '../models/timeline_track_item.dart';
 import '../models/voice_over.dart';
@@ -199,12 +200,20 @@ class ProjectNotifier extends StateNotifier<Project> {
 
   void trimClipEnd(String imageId, int newEndMs, {bool recordUndo = true}) {
     if (recordUndo) _undoRedo.recordSnapshot(state);
-    state = state.copyWith(images: ClipEditingService.rippleTrimClipEnd(images: state.images, clipId: imageId, newEndMs: newEndMs, voiceOverDurationMs: state.voiceOver?.durationMs));
+    final updatedImages = ClipEditingService.rippleTrimClipEnd(images: state.images, clipId: imageId, newEndMs: newEndMs, voiceOverDurationMs: state.voiceOver?.durationMs);
+    state = state.copyWith(
+      images: updatedImages,
+      explicitGaps: _reconcileGapsWithClips(state.explicitGaps, updatedImages),
+    );
   }
 
   void trimClipStart(String imageId, int newStartMs, {bool recordUndo = true}) {
     if (recordUndo) _undoRedo.recordSnapshot(state);
-    state = state.copyWith(images: ClipEditingService.trimClipStart(images: state.images, clipId: imageId, newStartMs: newStartMs, voiceOverDurationMs: state.voiceOver?.durationMs));
+    final updatedImages = ClipEditingService.trimClipStart(images: state.images, clipId: imageId, newStartMs: newStartMs, voiceOverDurationMs: state.voiceOver?.durationMs);
+    state = state.copyWith(
+      images: updatedImages,
+      explicitGaps: _reconcileGapsWithClips(state.explicitGaps, updatedImages),
+    );
   }
 
   void snapClipToAudio(String imageId) { if (state.voiceOver != null) trimClipEnd(imageId, state.voiceOver!.durationMs); }
@@ -221,12 +230,121 @@ class ProjectNotifier extends StateNotifier<Project> {
   void removeClipsPreservingGaps(Set<String> clipIds) {
     if (clipIds.isEmpty) return;
     _undoRedo.recordSnapshot(state);
+    final newGaps = <TimelineGap>[];
+    for (final img in state.images) {
+      if (clipIds.contains(img.id) && img.durationMs > 100) {
+        newGaps.add(TimelineGap(
+          id: _uuid.v4(),
+          trackId: img.trackId,
+          startMs: img.startMs,
+          endMs: img.endMs,
+        ));
+      }
+    }
     final updated = ClipEditingService.deleteClipPreservingGaps(
       images: state.images,
       clipIdsToDelete: clipIds,
       voiceOverDurationMs: state.voiceOver?.durationMs,
     );
-    state = _pruneEmptySecondaryTracks(state.copyWith(images: updated));
+    state = _pruneEmptySecondaryTracks(state.copyWith(
+      images: updated,
+      explicitGaps: [...state.explicitGaps, ...newGaps],
+    ));
+  }
+
+  /// Explicitly creates a blank space of [durationMs] at [startMs] on [trackId].
+  void createBlankAtPlayhead(String trackId, int startMs, {int durationMs = 3000}) {
+    _undoRedo.recordSnapshot(state);
+    final clampedStart = startMs.clamp(0, 36000000);
+    final dur = durationMs.clamp(200, 3600000);
+
+    final shiftedImages = state.images.map((img) {
+      if (img.trackId == trackId && img.startMs >= clampedStart) {
+        final ns = img.startMs + dur;
+        final ne = img.endMs + dur;
+        return img.copyWith(
+          userStartTimestampInput: (ns / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: (ne / 1000.0).toStringAsFixed(2),
+        );
+      }
+      return img;
+    }).toList();
+
+    final calculated = TimingEngine.calculateSequence(
+      images: shiftedImages,
+      voiceOverDurationMs: state.voiceOver?.durationMs,
+      snapFinalImageToAudio: false,
+    );
+    final gap = TimelineGap(
+      id: _uuid.v4(),
+      trackId: trackId,
+      startMs: clampedStart,
+      endMs: clampedStart + dur,
+    );
+    state = state.copyWith(
+      images: calculated,
+      explicitGaps: [...state.explicitGaps, gap],
+    );
+  }
+
+  /// Deletes an explicit blank space (optionally rippling subsequent clips left).
+  void removeExplicitGap(String gapId, {bool ripple = true}) {
+    final gap = state.explicitGaps.where((g) => g.id == gapId).firstOrNull;
+    if (gap == null) return;
+    _undoRedo.recordSnapshot(state);
+    final remainingGaps = state.explicitGaps.where((g) => g.id != gapId).toList();
+    if (!ripple) {
+      state = state.copyWith(explicitGaps: remainingGaps);
+      return;
+    }
+    final dur = gap.durationMs;
+    final shiftedImages = state.images.map((img) {
+      if (img.trackId == gap.trackId && img.startMs >= gap.endMs) {
+        final ns = (img.startMs - dur).clamp(0, 36000000);
+        final ne = (img.endMs - dur).clamp(ns + 200, 36000000);
+        return img.copyWith(
+          userStartTimestampInput: (ns / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: (ne / 1000.0).toStringAsFixed(2),
+        );
+      }
+      return img;
+    }).toList();
+    state = state.copyWith(
+      images: TimingEngine.calculateSequence(
+        images: shiftedImages,
+        voiceOverDurationMs: state.voiceOver?.durationMs,
+        snapFinalImageToAudio: false,
+      ),
+      explicitGaps: remainingGaps,
+    );
+  }
+
+  /// Shrinks or removes explicit gaps that are now covered by clips.
+  List<TimelineGap> _reconcileGapsWithClips(List<TimelineGap> gaps, List<ImageItem> images) {
+    if (gaps.isEmpty) return const [];
+    final result = <TimelineGap>[];
+    for (final gap in gaps) {
+      int gStart = gap.startMs;
+      int gEnd = gap.endMs;
+      final trackClips = images.where((i) => i.trackId == gap.trackId).toList();
+      bool fullyCovered = false;
+      for (final c in trackClips) {
+        if (c.startMs <= gStart && c.endMs >= gEnd) {
+          fullyCovered = true;
+          break;
+        }
+        if (c.startMs <= gStart && c.endMs > gStart && c.endMs < gEnd) {
+          gStart = c.endMs;
+        }
+        if (c.startMs > gStart && c.startMs < gEnd && c.endMs >= gEnd) {
+          gEnd = c.startMs;
+        }
+      }
+      if (!fullyCovered && gEnd - gStart > 100) {
+        result.add(gap.copyWith(startMs: gStart, endMs: gEnd));
+      }
+    }
+    return result;
   }
 
   Project _pruneEmptySecondaryTracks(Project p) {
@@ -287,16 +405,45 @@ class ProjectNotifier extends StateNotifier<Project> {
     );
 
     final updated = <ImageItem>[];
+    int pushCursor = endMs;
+    final othersOnTrack = <ImageItem>[];
     for (int i = 0; i < state.images.length; i++) {
       final img = state.images[i];
       if (isSameTrack && i == existingIdx) continue;
       if (img.trackId == targetTrackId) {
+        othersOnTrack.add(img);
+      } else {
+        updated.add(img);
+      }
+    }
+    othersOnTrack.sort((a, b) => a.startMs.compareTo(b.startMs));
+
+    for (final img in othersOnTrack) {
+      if (img.endMs <= clampedStart) {
+        // Before dropped clip: keep exact position
         updated.add(img.copyWith(
           userStartTimestampInput: img.userStartTimestampInput ?? (img.startMs / 1000.0).toStringAsFixed(2),
           userEndTimestampInput: img.userEndTimestampInput ?? (img.endMs / 1000.0).toStringAsFixed(2),
         ));
+      } else if (img.startMs >= pushCursor) {
+        // After dropped clip without overlap: keep exact position
+        updated.add(img.copyWith(
+          userStartTimestampInput: img.userStartTimestampInput ?? (img.startMs / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: img.userEndTimestampInput ?? (img.endMs / 1000.0).toStringAsFixed(2),
+        ));
+        pushCursor = img.endMs;
       } else {
-        updated.add(img);
+        // Overlaps dropped clip: shift right so dropped clip stays exactly where user stopped
+        final imgDur = img.durationMs > 0 ? img.durationMs : TimingEngine.defaultImageDurationMs;
+        final ns = pushCursor;
+        final ne = ns + imgDur;
+        updated.add(img.copyWith(
+          startMs: ns,
+          endMs: ne,
+          userStartTimestampInput: (ns / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: (ne / 1000.0).toStringAsFixed(2),
+        ));
+        pushCursor = ne;
       }
     }
     updated.add(newOrMoved);
@@ -305,23 +452,30 @@ class ProjectNotifier extends StateNotifier<Project> {
       return a.startMs.compareTo(b.startMs);
     });
 
+    final calculated = TimingEngine.calculateSequence(
+      images: updated,
+      voiceOverDurationMs: state.voiceOver?.durationMs,
+      snapFinalImageToAudio: false,
+    );
     state = state.copyWith(
-      images: TimingEngine.calculateSequence(
-        images: updated,
-        voiceOverDurationMs: state.voiceOver?.durationMs,
-        snapFinalImageToAudio: false,
-      ),
+      images: calculated,
+      explicitGaps: _reconcileGapsWithClips(state.explicitGaps, calculated),
     );
   }
   void swapImageClips(String idA, String idB) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimelineArrangementService.swapClips(images: state.images, idA: idA, idB: idB, voiceOverDurationMs: state.voiceOver?.durationMs)); }
   void reorderAndOccupy(String draggedId, String targetId, {required bool insertBefore}) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimelineArrangementService.reorderAndOccupy(images: state.images, draggedId: draggedId, targetId: targetId, insertBefore: insertBefore, voiceOverDurationMs: state.voiceOver?.durationMs)); }
   void fillBlankGap({required int startMs, required int endMs, required String trackId, required bool isColorBg, String? imagePath, Color? color, String? existingClipId}) {
     _undoRedo.recordSnapshot(state);
+    final List<ImageItem> nextImages;
     if (existingClipId != null) {
-      state = state.copyWith(images: TimelineArrangementService.fillGapWithClip(images: state.images, clipId: existingClipId, startMs: startMs, gapEndMs: endMs, targetTrackId: trackId, voiceOverDurationMs: state.voiceOver?.durationMs));
+      nextImages = TimelineArrangementService.fillGapWithClip(images: state.images, clipId: existingClipId, startMs: startMs, gapEndMs: endMs, targetTrackId: trackId, voiceOverDurationMs: state.voiceOver?.durationMs);
     } else {
-      state = state.copyWith(images: TimelineArrangementService.fillGap(images: state.images, startMs: startMs, endMs: endMs, trackId: trackId, isColorBg: isColorBg, imagePath: imagePath, color: color, voiceOverDurationMs: state.voiceOver?.durationMs));
+      nextImages = TimelineArrangementService.fillGap(images: state.images, startMs: startMs, endMs: endMs, trackId: trackId, isColorBg: isColorBg, imagePath: imagePath, color: color, voiceOverDurationMs: state.voiceOver?.durationMs);
     }
+    state = state.copyWith(
+      images: nextImages,
+      explicitGaps: _reconcileGapsWithClips(state.explicitGaps, nextImages),
+    );
   }
   void insertAssetAfterClip({required ImageItem afterClip, required bool isColorBg, String? imagePath, Color? color}) {
     _undoRedo.recordSnapshot(state);
@@ -396,6 +550,9 @@ class ProjectNotifier extends StateNotifier<Project> {
         trackId: trackId,
         voiceOverDurationMs: state.voiceOver?.durationMs,
       ),
+      explicitGaps: trackId == null
+          ? const []
+          : state.explicitGaps.where((g) => g.trackId != trackId).toList(),
     );
   }
 

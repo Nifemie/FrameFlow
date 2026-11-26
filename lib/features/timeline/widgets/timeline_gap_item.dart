@@ -10,6 +10,7 @@ import '../../../providers/selection_provider.dart';
 import '../../../services/timeline_arrangement_service.dart';
 
 class TimelineGapItem extends ConsumerWidget {
+  final String? gapId;
   final int startMs;
   final int endMs;
   final double pxPerSec;
@@ -18,6 +19,7 @@ class TimelineGapItem extends ConsumerWidget {
 
   const TimelineGapItem({
     super.key,
+    this.gapId,
     required this.startMs,
     required this.endMs,
     required this.pxPerSec,
@@ -93,11 +95,16 @@ class TimelineGapItem extends ConsumerWidget {
                   PopupMenuItem(value: 'seek', child: Row(children: [const Icon(Icons.play_arrow, size: 14, color: Colors.white70), const SizedBox(width: 8), Text('Seek to $durationSec s', style: const TextStyle(fontSize: 11, color: Colors.white))])),
                   PopupMenuItem(value: 'color', child: Row(children: [const Icon(Icons.palette_outlined, size: 14, color: Colors.purpleAccent), const SizedBox(width: 8), Text('Fill Empty Space with Color ($durationSec s)', style: const TextStyle(fontSize: 11, color: Colors.white))])),
                   PopupMenuItem(value: 'image', child: Row(children: [const Icon(Icons.add_photo_alternate, size: 14, color: AppColors.clipBlue), const SizedBox(width: 8), Text('Fill Empty Space with Image ($durationSec s)', style: const TextStyle(fontSize: 11, color: Colors.white))])),
+                  if (gapId != null)
+                    const PopupMenuItem(value: 'delete_gap', child: Row(children: [Icon(Icons.delete_outline, size: 14, color: AppColors.errorRed), SizedBox(width: 8), Text('Delete Blank (Close Gap)', style: TextStyle(fontSize: 11, color: AppColors.errorRed))])),
                 ],
               );
               if (val == 'image') _pickImageToFill(ref);
               if (val == 'color') _fillColorMatte(ref);
               if (val == 'seek') onTap?.call();
+              if (val == 'delete_gap' && gapId != null) {
+                ref.read(projectProvider.notifier).removeExplicitGap(gapId!, ripple: true);
+              }
             },
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 1),

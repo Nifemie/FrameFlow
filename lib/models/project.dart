@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'audio_clip_item.dart';
 import 'image_item.dart';
 import 'text_overlay_item.dart';
+import 'timeline_gap.dart';
 import 'timeline_marker.dart';
 import 'timeline_track_item.dart';
 import 'voice_over.dart';
@@ -45,6 +46,7 @@ class Project {
   final List<TextOverlayItem> textOverlays;
   final List<TimelineTrackItem> tracks;
   final List<TimelineMarker> markers;
+  final List<TimelineGap> explicitGaps;
   final String? scriptText;
   final TimingMode timingMode;
   final VideoAspectRatio aspectRatio;
@@ -60,6 +62,7 @@ class Project {
     this.images = const [], this.voiceOver,
     this.audioClips = const [], this.textOverlays = const [],
     this.tracks = const [], this.markers = const [],
+    this.explicitGaps = const [],
     this.scriptText, this.timingMode = TimingMode.automatic,
     this.aspectRatio = VideoAspectRatio.ratio16x9,
     this.resolution = VideoResolution.res1080p, this.fps = 30,
@@ -129,6 +132,7 @@ class Project {
     String? id, String? name, List<ImageItem>? images, VoiceOver? voiceOver,
     List<AudioClipItem>? audioClips, List<TextOverlayItem>? textOverlays,
     List<TimelineTrackItem>? tracks, List<TimelineMarker>? markers,
+    List<TimelineGap>? explicitGaps,
     bool clearVoiceOver = false,
     String? scriptText, TimingMode? timingMode, VideoAspectRatio? aspectRatio,
     VideoResolution? resolution, int? fps,
@@ -140,6 +144,7 @@ class Project {
       textOverlays: textOverlays ?? this.textOverlays,
       tracks: tracks ?? this.tracks,
       markers: markers ?? this.markers,
+      explicitGaps: explicitGaps ?? this.explicitGaps,
       scriptText: scriptText ?? this.scriptText, timingMode: timingMode ?? this.timingMode,
       aspectRatio: aspectRatio ?? this.aspectRatio, resolution: resolution ?? this.resolution, fps: fps ?? this.fps,
     );

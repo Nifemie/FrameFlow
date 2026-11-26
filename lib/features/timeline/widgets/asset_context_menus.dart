@@ -347,6 +347,11 @@ class AssetContextMenus {
             value: 'add_bg',
             child: Row(children: [Icon(Icons.palette_outlined, size: 15, color: Colors.purpleAccent), SizedBox(width: 8), Text('Add Solid Color Background', style: TextStyle(fontSize: 12, color: Colors.white))]),
           ),
+        if (isMedia)
+          const PopupMenuItem(
+            value: 'create_blank',
+            child: Row(children: [Icon(Icons.space_bar, size: 15, color: Colors.white70), SizedBox(width: 8), Text('Create Blank Space at Playhead...', style: TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
         if (isMedia) const PopupMenuDivider(),
         if (isMedia)
           const PopupMenuItem(
@@ -400,6 +405,9 @@ class AssetContextMenus {
       case 'add_bg':
         onAddBg?.call();
         break;
+      case 'create_blank':
+        _showCreateBlankDialog(context, ref, track.id);
+        break;
       case 'randomize_anim':
         showDialog(context: context, builder: (_) => const AnimationRandomisationDialog());
         break;
@@ -432,5 +440,55 @@ class AssetContextMenus {
         notifier.removeTrack(track.id);
         break;
     }
+  }
+
+  static void _showCreateBlankDialog(BuildContext context, WidgetRef ref, String trackId) {
+    final durCtrl = TextEditingController(text: '3.0');
+    final playheadMs = ref.read(playheadPositionProvider);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Create Blank Space', style: TextStyle(fontSize: 14, color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Insert blank space at ${TimeParser.formatStandard(playheadMs)}',
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: durCtrl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontFamily: 'Consolas', color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Duration (seconds)',
+                hintText: '3.0',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final sec = double.tryParse(durCtrl.text.trim());
+              if (sec != null && sec >= 0.2) {
+                ref.read(projectProvider.notifier).createBlankAtPlayhead(
+                  trackId,
+                  playheadMs,
+                  durationMs: (sec * 1000).round(),
+                );
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Create Blank'),
+          ),
+        ],
+      ),
+    );
   }
 }
