@@ -1,8 +1,10 @@
 import 'dart:math';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/image_item.dart';
 import '../../../models/timeline_track_item.dart';
@@ -56,8 +58,8 @@ class MediaTrackStrip extends ConsumerWidget {
     final box = context.findRenderObject() as RenderBox?;
     int rawMs = 0;
     if (box != null && box.hasSize) {
-      final centerGlobal = Offset(globalOffset.dx + 37.5, globalOffset.dy);
-      final local = box.globalToLocal(centerGlobal);
+      // childDragAnchorStrategy anchors globalOffset at the dragged clip's exact left edge
+      final local = box.globalToLocal(globalOffset);
       rawMs = ((local.dx.clamp(0.0, box.size.width) / pxPerSec) * 1000).round();
     }
     final snapOn = ref.read(snappingEnabledProvider);
@@ -78,6 +80,69 @@ class MediaTrackStrip extends ConsumerWidget {
     return snapped;
   }
 
+  (int startMs, int endMs) _emptyRangeAt(WidgetRef ref, int clickMs) {
+    final sorted = List<ImageItem>.from(images)..sort((a, b) => a.startMs.compareTo(b.startMs));
+    int emptyStart = 0;
+    int? emptyEnd;
+    for (final img in sorted) {
+      if (img.endMs <= clickMs) {
+        emptyStart = img.endMs;
+      } else if (img.startMs >= clickMs) {
+        emptyEnd = img.startMs;
+        break;
+      }
+    }
+    if (emptyEnd == null) {
+      final totalMs = ref.read(projectProvider).totalDurationMs;
+      emptyEnd = totalMs > emptyStart + 200 ? totalMs : emptyStart + 5000;
+    }
+    return (emptyStart, max(emptyStart + 200, emptyEnd));
+  }
+
+  void _openTimelineMenuAt(BuildContext context, WidgetRef ref, TapUpDetails details) {
+    final clickMs = ((details.localPosition.dx.clamp(0.0, contentWidth) / pxPerSec) * 1000).round();
+    final (emptyStart, emptyEnd) = _emptyRangeAt(ref, clickMs);
+
+    AssetContextMenus.showTimelineMenu(
+      context: context,
+      ref: ref,
+      globalPosition: details.globalPosition,
+      track: track,
+      emptyStartMs: emptyStart,
+      emptyEndMs: emptyEnd,
+      onFillEmptyWithMedia: () async {
+        final res = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: [...AppConstants.supportedImageExtensions, ...AppConstants.supportedVideoExtensions],
+        );
+        if (res != null && res.paths.isNotEmpty && res.paths.first != null) {
+          ref.read(projectProvider.notifier).fillBlankGap(
+            startMs: emptyStart,
+            endMs: emptyEnd,
+            trackId: track.id,
+            isColorBg: false,
+            imagePath: res.paths.first!,
+          );
+        }
+      },
+      onFillEmptyWithColor: () {
+        ref.read(projectProvider.notifier).fillBlankGap(
+          startMs: emptyStart,
+          endMs: emptyEnd,
+          trackId: track.id,
+          isColorBg: true,
+          color: const Color(0xFF1E293B),
+        );
+      },
+      onAddMedia: onAdd,
+      onAddFolder: onAddFolder,
+      onAddBg: () => ref.read(projectProvider.notifier).addColorBackground(
+        trackId: track.id,
+        insertAtMs: ref.read(playheadPositionProvider),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedId = ref.watch(selectedImageIdProvider);
@@ -85,15 +150,7 @@ class MediaTrackStrip extends ConsumerWidget {
 
     if (images.isEmpty) {
       return GestureDetector(
-        onSecondaryTapUp: (details) => AssetContextMenus.showTimelineMenu(
-          context: context,
-          ref: ref,
-          globalPosition: details.globalPosition,
-          track: track,
-          onAddMedia: onAdd,
-          onAddFolder: onAddFolder,
-          onAddBg: () => ref.read(projectProvider.notifier).addColorBackground(trackId: track.id),
-        ),
+        onSecondaryTapUp: (details) => _openTimelineMenuAt(context, ref, details),
         child: DragTarget<ImageItem>(
           onWillAcceptWithDetails: (_) => true,
           onAcceptWithDetails: (details) {
@@ -154,15 +211,7 @@ class MediaTrackStrip extends ConsumerWidget {
     }
 
     return GestureDetector(
-      onSecondaryTapUp: (details) => AssetContextMenus.showTimelineMenu(
-        context: context,
-        ref: ref,
-        globalPosition: details.globalPosition,
-        track: track,
-        onAddMedia: onAdd,
-        onAddFolder: onAddFolder,
-        onAddBg: () => ref.read(projectProvider.notifier).addColorBackground(trackId: track.id),
-      ),
+      onSecondaryTapUp: (details) => _openTimelineMenuAt(context, ref, details),
       child: DragTarget<ImageItem>(
         onWillAcceptWithDetails: (_) => true,
         onAcceptWithDetails: (details) {

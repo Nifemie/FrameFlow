@@ -320,18 +320,37 @@ class AssetContextMenus {
     required WidgetRef ref,
     required Offset globalPosition,
     required TimelineTrackItem track,
+    int? emptyStartMs,
+    int? emptyEndMs,
+    VoidCallback? onFillEmptyWithMedia,
+    VoidCallback? onFillEmptyWithColor,
     VoidCallback? onAddMedia,
     VoidCallback? onAddFolder,
     VoidCallback? onAddBg,
   }) async {
     final notifier = ref.read(projectProvider.notifier);
     final isMedia = track.isVideoOrBg;
+    final hasEmptyRange = isMedia && emptyStartMs != null && emptyEndMs != null && emptyEndMs > emptyStartMs;
+    final emptyLabel = hasEmptyRange
+        ? '${TimeParser.formatStandard(emptyStartMs)} → ${TimeParser.formatStandard(emptyEndMs)}'
+        : '';
 
     final selected = await showMenu<String>(
       context: context,
       color: AppColors.surface,
       position: RelativeRect.fromLTRB(globalPosition.dx, globalPosition.dy, globalPosition.dx, globalPosition.dy),
       items: [
+        if (hasEmptyRange && onFillEmptyWithMedia != null)
+          PopupMenuItem(
+            value: 'fill_empty_media',
+            child: Row(children: [const Icon(Icons.add_photo_alternate, size: 15, color: AppColors.clipBlueLight), const SizedBox(width: 8), Text('Fill Space ($emptyLabel) with Image/Video...', style: const TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        if (hasEmptyRange && onFillEmptyWithColor != null)
+          PopupMenuItem(
+            value: 'fill_empty_color',
+            child: Row(children: [const Icon(Icons.palette, size: 15, color: Colors.purpleAccent), const SizedBox(width: 8), Text('Fill Space ($emptyLabel) with Background', style: const TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        if (hasEmptyRange) const PopupMenuDivider(),
         if (isMedia && onAddMedia != null)
           const PopupMenuItem(
             value: 'add_media',
@@ -396,6 +415,12 @@ class AssetContextMenus {
 
     if (!context.mounted || selected == null) return;
     switch (selected) {
+      case 'fill_empty_media':
+        onFillEmptyWithMedia?.call();
+        break;
+      case 'fill_empty_color':
+        onFillEmptyWithColor?.call();
+        break;
       case 'add_media':
         onAddMedia?.call();
         break;
