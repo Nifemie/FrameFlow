@@ -6,6 +6,7 @@ import '../../core/utils/time_parser.dart';
 import '../../models/image_item.dart';
 import '../../providers/project_provider.dart';
 import '../../providers/selection_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/video_playback_engine.dart';
 import 'widgets/alignment_toolbar.dart';
 import 'widgets/asset_animation_editor.dart';
@@ -25,6 +26,7 @@ class PropertiesPanel extends ConsumerWidget {
     final selectedTextId = ref.watch(selectedTextOverlayIdProvider);
     final selectedAudioId = ref.watch(selectedAudioClipIdProvider);
     final project = ref.watch(projectProvider);
+    final theme = ref.watch(themeProvider);
 
     if (selectedAudioId != null && project.effectiveAudioClips.isNotEmpty) {
       final audioClip = project.effectiveAudioClips.where((c) => c.id == selectedAudioId).firstOrNull ??
@@ -32,7 +34,7 @@ class PropertiesPanel extends ConsumerWidget {
       if (audioClip != null) {
         return Container(
           width: 260,
-          decoration: const BoxDecoration(color: AppColors.surface, border: Border(left: BorderSide(color: AppColors.surfaceBorder, width: 1))),
+          decoration: BoxDecoration(color: theme.rightPanelColor, border: const Border(left: BorderSide(color: AppColors.surfaceBorder, width: 1))),
           child: AudioPropertiesEditor(clip: audioClip),
         );
       }
@@ -43,7 +45,7 @@ class PropertiesPanel extends ConsumerWidget {
       if (textItem != null) {
         return Container(
           width: 260,
-          decoration: const BoxDecoration(color: AppColors.surface, border: Border(left: BorderSide(color: AppColors.surfaceBorder, width: 1))),
+          decoration: BoxDecoration(color: theme.rightPanelColor, border: const Border(left: BorderSide(color: AppColors.surfaceBorder, width: 1))),
           child: TextPropertiesEditor(item: textItem),
         );
       }
@@ -61,7 +63,7 @@ class PropertiesPanel extends ConsumerWidget {
 
     return Container(
       width: 260,
-      decoration: const BoxDecoration(color: AppColors.surface, border: Border(left: BorderSide(color: AppColors.surfaceBorder, width: 1))),
+      decoration: BoxDecoration(color: theme.rightPanelColor, border: const Border(left: BorderSide(color: AppColors.surfaceBorder, width: 1))),
       child: selectedItem == null
           ? const Center(child: Padding(padding: EdgeInsets.all(16), child: Text('Select an image, background, or text overlay', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: AppColors.textMuted))))
           : ListView(

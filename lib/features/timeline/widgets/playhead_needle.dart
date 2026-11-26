@@ -4,6 +4,7 @@ import '../../../core/theme/app_theme.dart';
 class PlayheadNeedle extends StatelessWidget {
   final double positionX;
   final double height;
+  final Color color;
   final GestureDragStartCallback? onDragStart;
   final GestureDragUpdateCallback onDragUpdate;
   final VoidCallback? onDragEnd;
@@ -12,6 +13,7 @@ class PlayheadNeedle extends StatelessWidget {
     super.key,
     required this.positionX,
     required this.height,
+    this.color = AppColors.playheadNeedle,
     this.onDragStart,
     required this.onDragUpdate,
     this.onDragEnd,
@@ -37,7 +39,7 @@ class PlayheadNeedle extends StatelessWidget {
               child: Container(
                 width: 2,
                 height: height,
-                color: AppColors.playheadNeedle,
+                color: color,
               ),
             ),
           ),
@@ -55,7 +57,7 @@ class PlayheadNeedle extends StatelessWidget {
                 onHorizontalDragEnd: (_) => onDragEnd?.call(),
                 child: CustomPaint(
                   size: const Size(16, 12),
-                  painter: _PlayheadMarkerPainter(),
+                  painter: _PlayheadMarkerPainter(color),
                 ),
               ),
             ),
@@ -67,10 +69,13 @@ class PlayheadNeedle extends StatelessWidget {
 }
 
 class _PlayheadMarkerPainter extends CustomPainter {
+  final Color color;
+  const _PlayheadMarkerPainter(this.color);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.playheadNeedle
+      ..color = color
       ..style = PaintingStyle.fill;
 
     final path = Path()
@@ -85,5 +90,5 @@ class _PlayheadMarkerPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _PlayheadMarkerPainter oldDelegate) => oldDelegate.color != color;
 }

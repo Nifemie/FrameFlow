@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../providers/theme_provider.dart';
 
 /// Professional dark palette inspired by DaVinci Resolve, Premiere Pro & CapCut desktop.
 /// Deep black & dark charcoal with vibrant orange highlights.
@@ -43,27 +44,30 @@ class AppColors {
 }
 
 class AppTheme {
-  static ThemeData get darkTheme {
+  static ThemeData get darkTheme => fromStudioColors(StudioThemeColors.defaultTheme);
+
+  static ThemeData fromStudioColors(StudioThemeColors colors) {
     return ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: AppColors.background,
-      cardColor: AppColors.surface,
+      scaffoldBackgroundColor: colors.viewportColor,
+      cardColor: colors.leftPanelColor,
       dividerColor: AppColors.surfaceBorder,
-      colorScheme: const ColorScheme.dark(
-        primary: AppColors.accentOrange,
-        secondary: AppColors.accentOrange,
-        surface: AppColors.surface,
+      colorScheme: ColorScheme.dark(
+        primary: colors.buttonColor,
+        secondary: colors.buttonColor,
+        surface: colors.leftPanelColor,
         error: AppColors.errorRed,
       ),
       fontFamily: 'Segoe UI',
-      textTheme: const TextTheme(
-        bodyMedium: TextStyle(color: AppColors.textPrimary, fontSize: 13),
-        bodySmall: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-        titleMedium: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14),
+      iconTheme: IconThemeData(color: colors.textColor),
+      textTheme: TextTheme(
+        bodyMedium: TextStyle(color: colors.textColor, fontSize: 13),
+        bodySmall: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+        titleMedium: TextStyle(color: colors.textColor, fontWeight: FontWeight.w600, fontSize: 14),
       ),
       scrollbarTheme: ScrollbarThemeData(
         thumbColor: WidgetStateProperty.all(AppColors.surfaceBorder),
-        trackColor: WidgetStateProperty.all(AppColors.background),
+        trackColor: WidgetStateProperty.all(colors.timelineColor),
         thickness: WidgetStateProperty.all(6),
         radius: const Radius.circular(3),
       ),

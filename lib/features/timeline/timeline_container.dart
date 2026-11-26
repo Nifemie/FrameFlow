@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../providers/theme_provider.dart';
 import '../../../services/playback_controller.dart';
 import '../../../services/timeline_arrangement_service.dart';
 import '../media/widgets/folder_import_dialog.dart';
@@ -202,28 +203,31 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
       }
     });
 
+    final theme = ref.watch(themeProvider);
+    final timelineHeaderColor = Color.lerp(theme.timelineColor, Colors.white, 0.04) ?? theme.timelineColor;
+
     return Container(
-      color: AppColors.background,
+      color: theme.timelineColor,
       child: Column(
         children: [
           // Timeline Quick Control Bar: Zoom Slider & Fit to Project
           Container(
             height: 28,
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              border: Border(bottom: BorderSide(color: AppColors.surfaceBorder, width: 0.8)),
+            decoration: BoxDecoration(
+              color: timelineHeaderColor,
+              border: const Border(bottom: BorderSide(color: AppColors.surfaceBorder, width: 0.8)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.view_timeline_rounded, size: 14, color: AppColors.accentOrange),
+                Icon(Icons.view_timeline_rounded, size: 14, color: theme.buttonColor),
                 const SizedBox(width: 6),
-                const Text(
+                Text(
                   'TIMELINE',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: theme.textColor,
                     letterSpacing: 0.8,
                   ),
                 ),
@@ -540,10 +544,12 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                     Consumer(
                                       builder: (context, ref, _) {
                                         final curPlayheadMs = ref.watch(playheadPositionProvider);
+                                        final playheadColor = ref.watch(themeProvider.select((t) => t.playheadColor));
                                         final curPlayheadX = (curPlayheadMs / 1000) * pxPerSec;
                                         return PlayheadNeedle(
                                           positionX: curPlayheadX,
                                           height: constraints.maxHeight,
+                                          color: playheadColor,
                                           onDragStart: (d) => _handleNeedleDragStart(d, curPlayheadMs, pxPerSec),
                                           onDragUpdate: (d) => _handleNeedleDragUpdate(d, pxPerSec, totalDurationMs),
                                           onDragEnd: _handleNeedleDragEnd,

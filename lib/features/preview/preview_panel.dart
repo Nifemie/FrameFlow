@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/theme/app_theme.dart';
 import '../../models/image_item.dart';
 import '../../models/timeline_track_item.dart';
 import '../../providers/project_provider.dart';
 import '../../providers/selection_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/timing_engine.dart';
 import 'widgets/preview_canvas.dart';
 import 'widgets/transport_controls.dart';
@@ -42,9 +42,10 @@ class PreviewPanel extends ConsumerWidget {
     }
 
     final isTextVisible = project.isTrackVisible('track_t1');
+    final viewportColor = ref.watch(themeProvider.select((t) => t.viewportColor));
 
     return Container(
-      color: AppColors.background,
+      color: viewportColor,
       child: Column(
         children: [
           Expanded(

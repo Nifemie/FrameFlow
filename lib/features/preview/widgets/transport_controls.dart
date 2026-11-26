@@ -6,6 +6,7 @@ import '../../../core/utils/time_parser.dart';
 import '../../../models/project.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../providers/theme_provider.dart';
 import '../../../services/playback_controller.dart';
 import '../../timestamps/widgets/live_stamp_button.dart';
 import 'timecode_display.dart';
@@ -19,10 +20,11 @@ class TransportControls extends ConsumerWidget {
     final project = ref.watch(projectProvider);
     final totalMs = project.totalDurationMs;
     final playback = ref.read(playbackControllerProvider);
+    final theme = ref.watch(themeProvider);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      color: AppColors.surface,
+      color: theme.viewportControlsColor,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 540;
@@ -50,7 +52,7 @@ class TransportControls extends ConsumerWidget {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.skip_previous, size: 18),
-                        color: AppColors.textPrimary,
+                        color: theme.textColor,
                         tooltip: 'Previous Image Cut',
                         padding: const EdgeInsets.all(6),
                         constraints: const BoxConstraints(),
@@ -58,9 +60,9 @@ class TransportControls extends ConsumerWidget {
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.accentOrange,
+                          color: theme.buttonColor,
                         ),
                         child: IconButton(
                           icon: Icon(
@@ -77,7 +79,7 @@ class TransportControls extends ConsumerWidget {
                       const SizedBox(width: 8),
                       IconButton(
                         icon: const Icon(Icons.skip_next, size: 18),
-                        color: AppColors.textPrimary,
+                        color: theme.textColor,
                         tooltip: 'Next Image Cut',
                         padding: const EdgeInsets.all(6),
                         constraints: const BoxConstraints(),
@@ -90,9 +92,9 @@ class TransportControls extends ConsumerWidget {
                       // Split Clip (S) button
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.accentOrange.withValues(alpha: 0.18),
-                          foregroundColor: AppColors.accentOrange,
-                          side: const BorderSide(color: AppColors.accentOrange, width: 1.2),
+                          backgroundColor: theme.buttonColor.withValues(alpha: 0.18),
+                          foregroundColor: theme.buttonColor,
+                          side: BorderSide(color: theme.buttonColor, width: 1.2),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                         ),

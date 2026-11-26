@@ -7,6 +7,7 @@ import 'core/config/supabase_config.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_gate.dart';
+import 'providers/theme_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,15 +33,16 @@ Future<void> main() async {
   );
 }
 
-class FrameFlowApp extends StatelessWidget {
+class FrameFlowApp extends ConsumerWidget {
   const FrameFlowApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final studioTheme = ref.watch(themeProvider);
     return MaterialApp(
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.fromStudioColors(studioTheme),
       home: const AuthGate(),
     );
   }

@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/time_parser.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../providers/theme_provider.dart';
 import '../../timeline/services/timeline_zoom_controller.dart';
 
 class BottomStatusBar extends ConsumerWidget {
@@ -26,13 +27,14 @@ class BottomStatusBar extends ConsumerWidget {
     final project = ref.watch(projectProvider);
     final zoom = ref.watch(timelineZoomProvider);
     final zoomPercent = (zoom * 100).round();
+    final timelineColor = ref.watch(themeProvider.select((t) => t.timelineColor));
 
     return Container(
       height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.surfaceBorder, width: 1)),
+      decoration: BoxDecoration(
+        color: timelineColor,
+        border: const Border(top: BorderSide(color: AppColors.surfaceBorder, width: 1)),
       ),
       child: Row(
         children: [

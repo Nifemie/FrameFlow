@@ -8,10 +8,12 @@ import '../../../models/project.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../providers/theme_provider.dart';
 import '../../../services/project_storage_service.dart';
 import '../../export/widgets/export_dialog.dart';
 import 'project_rename_dialog.dart';
 import 'shortcuts_dialog.dart';
+import 'theme_customizer_dialog.dart';
 
 class TopNavBar extends ConsumerWidget {
   const TopNavBar({super.key});
@@ -45,13 +47,14 @@ class TopNavBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(projectProvider);
     final notifier = ref.read(projectProvider.notifier);
+    final theme = ref.watch(themeProvider);
 
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.surfaceBorder, width: 1)),
+      decoration: BoxDecoration(
+        color: theme.topPanelColor,
+        border: const Border(bottom: BorderSide(color: AppColors.surfaceBorder, width: 1)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -80,7 +83,7 @@ class TopNavBar extends ConsumerWidget {
               ),
               const SizedBox(width: 8),
               if (!isVeryCompact) ...[
-                const Text(AppConstants.appName, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                Text(AppConstants.appName, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.textColor)),
                 const SizedBox(width: 8),
               ],
               const VerticalDivider(width: 1, indent: 12, endIndent: 12, color: AppColors.surfaceBorder),
@@ -146,10 +149,10 @@ class TopNavBar extends ConsumerWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.accentOrange.withValues(alpha: 0.15),
+                    color: theme.buttonColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: AppColors.accentOrange,
+                      color: theme.buttonColor,
                       width: 1,
                     ),
                   ),
@@ -159,15 +162,15 @@ class TopNavBar extends ConsumerWidget {
                       Icon(
                         project.timingMode == TimingMode.automatic ? Icons.bolt : Icons.tune,
                         size: 12,
-                        color: AppColors.accentOrange,
+                        color: theme.buttonColor,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         project.timingMode.label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.accentOrange,
+                          color: theme.buttonColor,
                         ),
                       ),
                     ],
@@ -192,6 +195,13 @@ class TopNavBar extends ConsumerWidget {
 
               const Spacer(),
 
+              // Theme & Color Customizer button
+              IconButton(
+                icon: Icon(Icons.palette_outlined, size: 18, color: theme.buttonColor),
+                tooltip: 'Customize Theme & Colors',
+                splashRadius: 16,
+                onPressed: () => showDialog(context: context, builder: (_) => const ThemeCustomizerDialog()),
+              ),
               // Shortcuts info button
               IconButton(
                 icon: const Icon(Icons.keyboard_outlined, size: 18, color: AppColors.textSecondary),
@@ -204,7 +214,7 @@ class TopNavBar extends ConsumerWidget {
               // Export Video Button
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.exportGreen,
+                  backgroundColor: theme.exportColor,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: isVeryCompact ? 7 : 10, vertical: 7),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
@@ -344,6 +354,7 @@ class TopNavBar extends ConsumerWidget {
 
   Widget _buildFocusButton(WidgetRef ref, WorkspaceFocusMode mode, IconData icon, String tooltip) {
     final activeMode = ref.watch(workspaceFocusModeProvider);
+    final btnColor = ref.watch(themeProvider.select((t) => t.buttonColor));
     final isActive = activeMode == mode;
     return Tooltip(
       message: tooltip,
@@ -358,17 +369,17 @@ class TopNavBar extends ConsumerWidget {
           height: 30,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isActive ? AppColors.accentOrange.withValues(alpha: 0.18) : Colors.transparent,
+            color: isActive ? btnColor.withValues(alpha: 0.18) : Colors.transparent,
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: isActive ? AppColors.accentOrange : Colors.transparent,
+              color: isActive ? btnColor : Colors.transparent,
               width: 1,
             ),
           ),
           child: Icon(
             icon,
             size: 16,
-            color: isActive ? AppColors.accentOrange : AppColors.textSecondary,
+            color: isActive ? btnColor : AppColors.textSecondary,
           ),
         ),
       ),

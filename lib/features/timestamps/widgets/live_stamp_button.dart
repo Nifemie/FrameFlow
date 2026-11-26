@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/time_parser.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../providers/theme_provider.dart';
 
 class LiveStampButton extends ConsumerWidget {
   const LiveStampButton({super.key});
@@ -31,11 +32,12 @@ class LiveStampButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final btnColor = ref.watch(themeProvider.select((t) => t.buttonColor));
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.accentOrange.withValues(alpha: 0.15),
-        foregroundColor: AppColors.accentOrange,
-        side: const BorderSide(color: AppColors.accentOrange, width: 1.2),
+        backgroundColor: btnColor.withValues(alpha: 0.15),
+        foregroundColor: btnColor,
+        side: BorderSide(color: btnColor, width: 1.2),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),

@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../models/image_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../providers/theme_provider.dart';
 import '../../timeline/widgets/asset_context_menus.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
 import 'folder_import_dialog.dart';
@@ -59,8 +60,8 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
     final selectedId = ref.watch(selectedImageIdProvider);
     final videoTracks = project.effectiveTracks.where((t) => t.isVideoOrBg).toList();
     final displayedImages = _targetTrack == 'all' ? allImages : allImages.where((i) => i.trackId == _targetTrack).toList();
-
-    const Color btnColor = AppColors.accentOrange;
+    final theme = ref.watch(themeProvider);
+    final btnColor = theme.buttonColor;
 
     return Column(
       children: [
@@ -72,7 +73,7 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                 child: Text(
                   'Clips (${allImages.length})',
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.textColor),
                 ),
               ),
               Row(
@@ -128,7 +129,7 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                   _buildFilterChip(
                     tr.id,
                     '${tr.name} (${allImages.where((i) => i.trackId == tr.id).length})',
-                    AppColors.accentOrange,
+                    btnColor,
                   ),
                   const SizedBox(width: 4),
                 ],

@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../providers/theme_provider.dart';
 import '../../../services/playback_controller.dart';
 import '../../../services/video_playback_engine.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
@@ -35,10 +36,12 @@ class TrackHeaderColumn extends ConsumerWidget {
     final project = ref.watch(projectProvider);
     final notifier = ref.read(projectProvider.notifier);
     final tracks = project.effectiveTracks;
+    final theme = ref.watch(themeProvider);
+    final headerBg = Color.lerp(theme.timelineColor, Colors.white, 0.03) ?? theme.timelineColor;
 
     return Container(
       width: 148,
-      decoration: const BoxDecoration(color: AppColors.surface, border: Border(right: BorderSide(color: AppColors.surfaceBorder, width: 1))),
+      decoration: BoxDecoration(color: headerBg, border: const Border(right: BorderSide(color: AppColors.surfaceBorder, width: 1))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

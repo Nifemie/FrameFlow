@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/natural_sort.dart';
 import '../../providers/project_provider.dart';
 import '../../providers/selection_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/audio_probe_service.dart';
 import 'widgets/audio_drop_card.dart';
 import 'widgets/image_list_view.dart';
@@ -77,10 +78,11 @@ class MediaPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final leftPanelColor = ref.watch(themeProvider.select((t) => t.leftPanelColor));
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(
+      decoration: BoxDecoration(
+        color: leftPanelColor,
+        border: const Border(
           right: BorderSide(color: AppColors.surfaceBorder, width: 1),
         ),
       ),
