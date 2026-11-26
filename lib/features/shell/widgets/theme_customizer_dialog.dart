@@ -3,56 +3,61 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../providers/theme_provider.dart';
+import 'advanced_color_picker_dialog.dart';
 
 class ThemeCustomizerDialog extends ConsumerWidget {
   const ThemeCustomizerDialog({super.key});
 
-  static const _surfaceSwatches = <Color>[
-    Color(0xFF000000),
-    Color(0xFF050505),
-    Color(0xFF0C0D11),
-    Color(0xFF13151C),
-    Color(0xFF181B24),
-    Color(0xFF1E293B),
-    Color(0xFF141824),
-    Color(0xFF1A1625),
-    Color(0xFF13201B),
-    Color(0xFF211616),
-    Color(0xFF282D3C),
-    Color(0xFF334155),
-  ];
-
-  static const _accentSwatches = <Color>[
-    Color(0xFFFF6600),
-    Color(0xFFFF7A1A),
-    Color(0xFF10B981),
-    Color(0xFF3B82F6),
-    Color(0xFF6366F1),
-    Color(0xFF8B5CF6),
-    Color(0xFFEC4899),
-    Color(0xFFEF4444),
-    Color(0xFFEAB308),
-    Color(0xFFF3F4F6),
-    Color(0xFFFFFFFF),
-    Color(0xFF9CA3AF),
-  ];
+  Future<void> _promptSaveTheme(BuildContext context, WidgetRef ref, StudioThemeColors current) async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Save Custom Theme', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(fontSize: 13, color: Colors.white),
+          decoration: const InputDecoration(
+            labelText: 'Theme Name',
+            hintText: 'e.g. Midnight Blue, Neon Studio',
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (name != null && name.trim().isNotEmpty) {
+      final saved = ref.read(savedThemesProvider.notifier).saveTheme(name, current);
+      ref.read(themeProvider.notifier).applySavedTheme(saved);
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final notifier = ref.read(themeProvider.notifier);
+    final savedThemes = ref.watch(savedThemesProvider);
+    final savedNotifier = ref.read(savedThemesProvider.notifier);
 
-    final items = <({String key, String label, Color color, bool isAccent})>[
-      (key: 'topPanel', label: 'Top Panel', color: theme.topPanelColor, isAccent: false),
-      (key: 'leftPanel', label: 'Left Panel', color: theme.leftPanelColor, isAccent: false),
-      (key: 'rightPanel', label: 'Right Panel', color: theme.rightPanelColor, isAccent: false),
-      (key: 'viewport', label: 'Viewport', color: theme.viewportColor, isAccent: false),
-      (key: 'viewportControls', label: 'Viewport Controls', color: theme.viewportControlsColor, isAccent: false),
-      (key: 'timeline', label: 'Timeline & Background', color: theme.timelineColor, isAccent: false),
-      (key: 'text', label: 'Text Colour', color: theme.textColor, isAccent: true),
-      (key: 'button', label: 'Button Colour', color: theme.buttonColor, isAccent: true),
-      (key: 'playhead', label: 'Playhead Colour', color: theme.playheadColor, isAccent: true),
-      (key: 'export', label: 'Export Colour', color: theme.exportColor, isAccent: true),
+    final items = <({String key, String label, Color color})>[
+      (key: 'topPanel', label: 'Top Panel', color: theme.topPanelColor),
+      (key: 'leftPanel', label: 'Left Panel', color: theme.leftPanelColor),
+      (key: 'rightPanel', label: 'Right Panel', color: theme.rightPanelColor),
+      (key: 'viewport', label: 'Viewport', color: theme.viewportColor),
+      (key: 'viewportControls', label: 'Viewport Controls', color: theme.viewportControlsColor),
+      (key: 'timeline', label: 'Timeline & Background', color: theme.timelineColor),
+      (key: 'text', label: 'Text Colour', color: theme.textColor),
+      (key: 'button', label: 'Button Colour', color: theme.buttonColor),
+      (key: 'playhead', label: 'Playhead Colour', color: theme.playheadColor),
+      (key: 'export', label: 'Export Colour', color: theme.exportColor),
     ];
 
     return AlertDialog(
@@ -65,7 +70,7 @@ class ThemeCustomizerDialog extends ConsumerWidget {
         ],
       ),
       content: SizedBox(
-        width: 440,
+        width: 460,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -100,15 +105,86 @@ class ThemeCustomizerDialog extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Saved Custom Themes', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                  TextButton.icon(
+                    onPressed: () => _promptSaveTheme(context, ref, theme),
+                    icon: Icon(Icons.bookmark_add_outlined, size: 13, color: theme.buttonColor),
+                    label: Text('Save Current Theme', style: TextStyle(fontSize: 11, color: theme.buttonColor)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
+              ),
+              if (savedThemes.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6),
+                  child: Text('No saved custom themes yet. Customize colors below and click "Save Current Theme".', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                )
+              else ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: savedThemes.map((saved) {
+                    final isSelected = theme.presetName == 'saved:${saved.id}';
+                    return InkWell(
+                      onTap: () => notifier.applySavedTheme(saved),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceLight,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isSelected ? saved.colors.buttonColor : AppColors.surfaceBorder,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(color: saved.colors.viewportColor, shape: BoxShape.circle, border: Border.all(color: Colors.white24)),
+                            ),
+                            const SizedBox(width: 3),
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(color: saved.colors.buttonColor, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(saved.name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: () => savedNotifier.deleteTheme(saved.id),
+                              child: const Icon(Icons.close, size: 12, color: AppColors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+
+              const SizedBox(height: 14),
               const Divider(height: 1, color: AppColors.surfaceBorder),
               const SizedBox(height: 12),
-              const Text('Custom Colors', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+              const Text('Custom Colors (Wheel, HSL, RGB & Recommended)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
               const SizedBox(height: 8),
               ...items.map((item) => _ColorSettingRow(
                     label: item.label,
                     color: item.color,
-                    swatches: item.isAccent ? _accentSwatches : _surfaceSwatches,
                     onColorPicked: (c) => notifier.updateColor(item.key, c),
                   )),
             ],
@@ -208,111 +284,29 @@ class _PresetCard extends StatelessWidget {
 class _ColorSettingRow extends StatelessWidget {
   final String label;
   final Color color;
-  final List<Color> swatches;
   final ValueChanged<Color> onColorPicked;
 
   const _ColorSettingRow({
     required this.label,
     required this.color,
-    required this.swatches,
     required this.onColorPicked,
   });
 
   String _hex(Color c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-
-  Future<void> _openPicker(BuildContext context) async {
-    final hexCtrl = TextEditingController(text: _hex(color));
-    Color tempColor = color;
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-          content: SizedBox(
-            width: 300,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: swatches.map((s) {
-                    final selected = s.toARGB32() == tempColor.toARGB32();
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          tempColor = s;
-                          hexCtrl.text = _hex(s);
-                        });
-                        onColorPicked(s);
-                      },
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: s,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: selected ? Colors.white : AppColors.surfaceBorder,
-                            width: selected ? 2.2 : 1,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: hexCtrl,
-                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 12, color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Hex Color (e.g. #FF6600)',
-                    prefixIcon: Container(
-                      width: 18,
-                      height: 18,
-                      margin: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: tempColor,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: AppColors.surfaceBorder),
-                      ),
-                    ),
-                  ),
-                  onChanged: (val) {
-                    final clean = val.trim().replaceAll('#', '');
-                    if (clean.length == 6) {
-                      final parsed = int.tryParse('FF$clean', radix: 16);
-                      if (parsed != null) {
-                        final next = Color(parsed);
-                        setState(() => tempColor = next);
-                        onColorPicked(next);
-                      }
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Done'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
-        onTap: () => _openPicker(context),
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (_) => AdvancedColorPickerDialog(
+            title: label,
+            initialColor: color,
+            onColorChanged: onColorPicked,
+          ),
+        ),
         borderRadius: BorderRadius.circular(6),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),

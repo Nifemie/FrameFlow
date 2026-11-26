@@ -122,6 +122,32 @@ class StudioThemeColors {
   }
 }
 
+class SavedCustomTheme {
+  final String id;
+  final String name;
+  final StudioThemeColors colors;
+
+  const SavedCustomTheme({
+    required this.id,
+    required this.name,
+    required this.colors,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'colors': colors.toMap(),
+      };
+
+  factory SavedCustomTheme.fromMap(Map<String, dynamic> map) {
+    return SavedCustomTheme(
+      id: map['id'] as String? ?? '',
+      name: map['name'] as String? ?? 'Custom Theme',
+      colors: StudioThemeColors.fromMap(map['colors'] as Map<String, dynamic>? ?? const {}),
+    );
+  }
+}
+
 class ThemeNotifier extends StateNotifier<StudioThemeColors> {
   static const _prefsKey = 'frameflow_studio_theme_v1';
 
@@ -154,6 +180,11 @@ class ThemeNotifier extends StateNotifier<StudioThemeColors> {
 
   void applyBlackTheme() {
     state = StudioThemeColors.blackTheme;
+    _save();
+  }
+
+  void applySavedTheme(SavedCustomTheme saved) {
+    state = saved.colors.copyWith(presetName: 'saved:${saved.id}');
     _save();
   }
 
@@ -194,6 +225,108 @@ class ThemeNotifier extends StateNotifier<StudioThemeColors> {
   }
 }
 
+class SavedThemesNotifier extends StateNotifier<List<SavedCustomTheme>> {
+  static const _prefsKey = 'frameflow_saved_custom_themes_v1';
+
+  SavedThemesNotifier() : super(const []) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_prefsKey);
+      if (raw != null && raw.isNotEmpty) {
+        final list = jsonDecode(raw) as List<dynamic>;
+        state = list.map((e) => SavedCustomTheme.fromMap(e as Map<String, dynamic>)).toList();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _save() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsKey, jsonEncode(state.map((t) => t.toMap()).toList()));
+    } catch (_) {}
+  }
+
+  SavedCustomTheme saveTheme(String name, StudioThemeColors colors) {
+    final trimmed = name.trim();
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final item = SavedCustomTheme(
+      id: id,
+      name: trimmed.isEmpty ? 'Custom ${state.length + 1}' : trimmed,
+      colors: colors.copyWith(presetName: 'saved:$id'),
+    );
+    state = [...state, item];
+    _save();
+    return item;
+  }
+
+  void deleteTheme(String id) {
+    state = state.where((t) => t.id != id).toList();
+    _save();
+  }
+}
+
+class RecommendedColorsNotifier extends StateNotifier<List<Color>> {
+  static const _prefsKey = 'frameflow_recommended_colors_v1';
+
+  static const List<Color> defaultRecommended = [
+    Color(0xFFFF6600), // Studio Orange
+    Color(0xFF10B981), // Emerald Green
+    Color(0xFF3B82F6), // Electric Blue
+    Color(0xFF8B5CF6), // Violet
+    Color(0xFFEC4899), // Rose Pink
+    Color(0xFFEF4444), // Crimson Red
+    Color(0xFFEAB308), // Amber Gold
+    Color(0xFF000000), // Pure Black
+    Color(0xFF13151C), // Studio Charcoal
+    Color(0xFFF3F4F6), // Crisp White
+  ];
+
+  RecommendedColorsNotifier() : super(defaultRecommended) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_prefsKey);
+      if (raw != null && raw.isNotEmpty) {
+        final list = jsonDecode(raw) as List<dynamic>;
+        state = list.whereType<int>().map((v) => Color(v)).toList();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _save() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsKey, jsonEncode(state.map((c) => c.toARGB32()).toList()));
+    } catch (_) {}
+  }
+
+  void addColor(Color color) {
+    if (state.any((c) => c.toARGB32() == color.toARGB32())) return;
+    state = [...state, color];
+    _save();
+  }
+
+  void removeColor(Color color) {
+    state = state.where((c) => c.toARGB32() != color.toARGB32()).toList();
+    _save();
+  }
+}
+
 final themeProvider = StateNotifierProvider<ThemeNotifier, StudioThemeColors>((ref) {
   return ThemeNotifier();
+});
+
+final savedThemesProvider = StateNotifierProvider<SavedThemesNotifier, List<SavedCustomTheme>>((ref) {
+  return SavedThemesNotifier();
+});
+
+final recommendedColorsProvider = StateNotifierProvider<RecommendedColorsNotifier, List<Color>>((ref) {
+  return RecommendedColorsNotifier();
 });
