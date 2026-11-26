@@ -235,21 +235,22 @@ void main() {
       expect(notifier.state.explicitGaps, isEmpty);
     });
 
-    test('Blanks only exist when deleting a clip in-place or via createBlankAtPlayhead', () {
+    test('Deleting a clip leaves empty space without creating explicit gap cards', () {
       final notifier = ProjectNotifier();
       notifier.addImages(['a.jpg', 'b.jpg'], insertAtMs: 0);
       expect(notifier.state.explicitGaps, isEmpty);
 
-      // 1. Delete clip A preserving blank -> creates explicit gap 0..5000
+      // 1. Delete clip A -> leaves 0..5000 as empty space and keeps B at 5000..10000
       final aId = notifier.state.images.first.id;
       notifier.removeClipsPreservingGaps({aId});
-      expect(notifier.state.explicitGaps.length, equals(1));
-      expect(notifier.state.explicitGaps.first.startMs, equals(0));
-      expect(notifier.state.explicitGaps.first.endMs, equals(5000));
+      expect(notifier.state.explicitGaps, isEmpty);
+      expect(notifier.state.images.length, equals(1));
+      expect(notifier.state.images.first.startMs, equals(5000));
+      expect(notifier.state.images.first.endMs, equals(10000));
 
-      // 2. Create blank at 5000ms (3000ms) -> creates second explicit gap and shifts B
+      // 2. Create blank at 5000ms (3000ms) -> creates explicit gap and shifts B
       notifier.createBlankAtPlayhead('track_v1', 5000, durationMs: 3000);
-      expect(notifier.state.explicitGaps.length, equals(2));
+      expect(notifier.state.explicitGaps.length, equals(1));
       expect(notifier.state.images.first.startMs, equals(8000));
     });
   });

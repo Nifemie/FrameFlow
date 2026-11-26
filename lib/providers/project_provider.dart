@@ -217,7 +217,7 @@ class ProjectNotifier extends StateNotifier<Project> {
   }
 
   void snapClipToAudio(String imageId) { if (state.voiceOver != null) trimClipEnd(imageId, state.voiceOver!.durationMs); }
-  void removeImage(String id, {bool preserveGap = false}) {
+  void removeImage(String id, {bool preserveGap = true}) {
     if (preserveGap) {
       removeClipsPreservingGaps({id});
       return;
@@ -230,17 +230,6 @@ class ProjectNotifier extends StateNotifier<Project> {
   void removeClipsPreservingGaps(Set<String> clipIds) {
     if (clipIds.isEmpty) return;
     _undoRedo.recordSnapshot(state);
-    final newGaps = <TimelineGap>[];
-    for (final img in state.images) {
-      if (clipIds.contains(img.id) && img.durationMs > 100) {
-        newGaps.add(TimelineGap(
-          id: _uuid.v4(),
-          trackId: img.trackId,
-          startMs: img.startMs,
-          endMs: img.endMs,
-        ));
-      }
-    }
     final updated = ClipEditingService.deleteClipPreservingGaps(
       images: state.images,
       clipIdsToDelete: clipIds,
@@ -248,7 +237,6 @@ class ProjectNotifier extends StateNotifier<Project> {
     );
     state = _pruneEmptySecondaryTracks(state.copyWith(
       images: updated,
-      explicitGaps: [...state.explicitGaps, ...newGaps],
     ));
   }
 
