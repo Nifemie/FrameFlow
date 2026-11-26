@@ -260,6 +260,59 @@ class ProjectNotifier extends StateNotifier<Project> {
   }
 
   void moveImageClipStart(String clipId, int newStartMs) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimelineArrangementService.moveClipStart(images: state.images, clipId: clipId, newStartMs: newStartMs, voiceOverDurationMs: state.voiceOver?.durationMs)); }
+
+  /// Places a dropped clip onto [targetTrackId] at [startMs] while strictly preserving its duration.
+  void placeClipOnTrack({
+    required ImageItem clip,
+    required String targetTrackId,
+    required int startMs,
+  }) {
+    _undoRedo.recordSnapshot(state);
+    final dur = clip.durationMs > 0 ? clip.durationMs : TimingEngine.defaultImageDurationMs;
+    final clampedStart = startMs.clamp(0, 36000000);
+    final endMs = clampedStart + dur;
+
+    final existingIdx = state.images.indexWhere((i) => i.id == clip.id);
+    final bool isSameTrack = existingIdx >= 0 && state.images[existingIdx].trackId == targetTrackId;
+
+    final newOrMoved = clip.copyWith(
+      id: (existingIdx >= 0 && !isSameTrack) ? _uuid.v4() : clip.id,
+      trackId: targetTrackId,
+      startMs: clampedStart,
+      endMs: endMs,
+      durationMs: dur,
+      userStartTimestampInput: (clampedStart / 1000.0).toStringAsFixed(2),
+      userEndTimestampInput: (endMs / 1000.0).toStringAsFixed(2),
+      clearValidationError: true,
+    );
+
+    final updated = <ImageItem>[];
+    for (int i = 0; i < state.images.length; i++) {
+      final img = state.images[i];
+      if (isSameTrack && i == existingIdx) continue;
+      if (img.trackId == targetTrackId) {
+        updated.add(img.copyWith(
+          userStartTimestampInput: img.userStartTimestampInput ?? (img.startMs / 1000.0).toStringAsFixed(2),
+          userEndTimestampInput: img.userEndTimestampInput ?? (img.endMs / 1000.0).toStringAsFixed(2),
+        ));
+      } else {
+        updated.add(img);
+      }
+    }
+    updated.add(newOrMoved);
+    updated.sort((a, b) {
+      if (a.trackId != b.trackId) return a.trackId.compareTo(b.trackId);
+      return a.startMs.compareTo(b.startMs);
+    });
+
+    state = state.copyWith(
+      images: TimingEngine.calculateSequence(
+        images: updated,
+        voiceOverDurationMs: state.voiceOver?.durationMs,
+        snapFinalImageToAudio: false,
+      ),
+    );
+  }
   void swapImageClips(String idA, String idB) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimelineArrangementService.swapClips(images: state.images, idA: idA, idB: idB, voiceOverDurationMs: state.voiceOver?.durationMs)); }
   void reorderAndOccupy(String draggedId, String targetId, {required bool insertBefore}) { _undoRedo.recordSnapshot(state); state = state.copyWith(images: TimelineArrangementService.reorderAndOccupy(images: state.images, draggedId: draggedId, targetId: targetId, insertBefore: insertBefore, voiceOverDurationMs: state.voiceOver?.durationMs)); }
   void fillBlankGap({required int startMs, required int endMs, required String trackId, required bool isColorBg, String? imagePath, Color? color, String? existingClipId}) {

@@ -9,6 +9,7 @@ import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../services/playback_controller.dart';
+import '../../../services/timeline_arrangement_service.dart';
 import 'asset_context_menus.dart';
 import 'timeline_clip.dart';
 import 'timeline_gap_item.dart';
@@ -51,6 +52,32 @@ class MediaTrackStrip extends ConsumerWidget {
     return list;
   }
 
+  int _computeDropStartMs(BuildContext context, WidgetRef ref, Offset globalOffset) {
+    final box = context.findRenderObject() as RenderBox?;
+    int rawMs = 0;
+    if (box != null && box.hasSize) {
+      final centerGlobal = Offset(globalOffset.dx + 37.5, globalOffset.dy);
+      final local = box.globalToLocal(centerGlobal);
+      rawMs = ((local.dx.clamp(0.0, box.size.width) / pxPerSec) * 1000).round();
+    }
+    final snapOn = ref.read(snappingEnabledProvider);
+    if (!snapOn) return rawMs;
+    final project = ref.read(projectProvider);
+    final targets = <int>[
+      0,
+      ref.read(playheadPositionProvider),
+      ...project.markers.map((m) => m.timestampMs),
+      ...project.images.expand((i) => [i.startMs, i.endMs]),
+    ];
+    final (snapped, _) = TimelineArrangementService.snapToTargets(
+      targetMs: rawMs,
+      targets: targets,
+      pxPerSec: pxPerSec,
+      enabled: true,
+    );
+    return snapped;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedId = ref.watch(selectedImageIdProvider);
@@ -70,7 +97,12 @@ class MediaTrackStrip extends ConsumerWidget {
         child: DragTarget<ImageItem>(
           onWillAcceptWithDetails: (_) => true,
           onAcceptWithDetails: (details) {
-            ref.read(projectProvider.notifier).insertImagesAt(0, [details.data.filePath], trackId: track.id);
+            final dropStartMs = _computeDropStartMs(context, ref, details.offset);
+            ref.read(projectProvider.notifier).placeClipOnTrack(
+              clip: details.data,
+              targetTrackId: track.id,
+              startMs: dropStartMs,
+            );
           },
         builder: (context, candidateData, _) {
           final isDropHover = candidateData.isNotEmpty;
@@ -135,9 +167,12 @@ class MediaTrackStrip extends ConsumerWidget {
         onWillAcceptWithDetails: (_) => true,
         onAcceptWithDetails: (details) {
           final dropped = details.data;
-          if (!images.any((i) => i.id == dropped.id)) {
-            ref.read(projectProvider.notifier).insertImagesAt(images.length, [dropped.filePath], trackId: track.id);
-          }
+          final dropStartMs = _computeDropStartMs(context, ref, details.offset);
+          ref.read(projectProvider.notifier).placeClipOnTrack(
+            clip: dropped,
+            targetTrackId: track.id,
+            startMs: dropStartMs,
+          );
         },
       builder: (context, candidateData, _) {
         final isDropHover = candidateData.isNotEmpty;

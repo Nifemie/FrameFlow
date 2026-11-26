@@ -52,7 +52,7 @@ class Project {
   final int fps;
 
   static List<TimelineTrackItem> get defaultTracks => const [
-    TimelineTrackItem(id: 'track_v1', name: 'Track 1 (Media)', type: TrackType.mainVideo, orderIndex: 0),
+    TimelineTrackItem(id: 'track_v1', name: 'Assets 1', type: TrackType.mainVideo, orderIndex: 0),
   ];
 
   const Project({
@@ -68,7 +68,7 @@ class Project {
   List<TimelineTrackItem> get effectiveTracks {
     final list = List<TimelineTrackItem>.from(tracks.isNotEmpty ? tracks : defaultTracks);
     if (!list.any((t) => t.id == 'track_v1' || t.type == TrackType.mainVideo)) {
-      list.insert(0, const TimelineTrackItem(id: 'track_v1', name: 'Track 1 (Media)', type: TrackType.mainVideo, orderIndex: 0));
+      list.insert(0, const TimelineTrackItem(id: 'track_v1', name: 'Assets 1', type: TrackType.mainVideo, orderIndex: 0));
     }
     // Auto-reveal Audio Track if voice-over or audio clips exist
     if ((audioClips.isNotEmpty || voiceOver != null) && !list.any((t) => t.type == TrackType.audio)) {

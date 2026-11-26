@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frameflow/models/image_item.dart';
 import 'package:frameflow/models/timeline_track_item.dart';
+import 'package:frameflow/models/voice_over.dart';
 import 'package:frameflow/providers/project_provider.dart';
 import 'package:frameflow/services/clip_editing_service.dart';
 import 'package:frameflow/services/timeline_arrangement_service.dart';
@@ -213,6 +214,23 @@ void main() {
       expect(notifier.state.images[1].endMs, equals(10000));
       expect(notifier.state.images[2].displayName, equals('b.jpg'));
       expect(notifier.state.images[2].startMs, equals(10000));
+    });
+
+    test('Dragging clip to new Assets track keeps exact position & duration even with voice-over', () {
+      final notifier = ProjectNotifier();
+      notifier.setVoiceOver(const VoiceOver(filePath: 'vo.mp3', fileName: 'vo.mp3', durationMs: 60000));
+      notifier.addImages(['img1.jpg'], insertAtMs: 0); // 5s clip on track_v1
+      notifier.addTrack(name: 'Assets', type: TrackType.overlayVideo);
+      final assetsTrack = notifier.state.tracks.firstWhere((t) => t.type == TrackType.overlayVideo);
+      final clip = notifier.state.images.first;
+
+      notifier.placeClipOnTrack(clip: clip, targetTrackId: assetsTrack.id, startMs: 12000);
+      final onAssets = notifier.state.imagesForTrack(assetsTrack.id);
+
+      expect(onAssets.length, equals(1));
+      expect(onAssets.first.startMs, equals(12000));
+      expect(onAssets.first.durationMs, equals(5000));
+      expect(onAssets.first.endMs, equals(17000));
     });
   });
 }
