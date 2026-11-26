@@ -68,27 +68,38 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Clips (${allImages.length})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              Expanded(
+                child: Text(
+                  'Clips (${allImages.length})',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+              ),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.palette_outlined, size: 17, color: Colors.purpleAccent),
-                    tooltip: 'Add Color Matte to ${_targetTrack == "track_bg" ? "Underlay Track" : "Selected Track"}', splashRadius: 16,
+                    icon: const Icon(Icons.palette_outlined, size: 16, color: Colors.purpleAccent),
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    tooltip: 'Add Color Matte to ${_targetTrack == "track_bg" ? "Underlay Track" : "Selected Track"}', splashRadius: 14,
                     onPressed: () => ref.read(projectProvider.notifier).addColorBackground(trackId: _targetTrack == 'all' ? 'track_v1' : _targetTrack),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.playlist_add_check, size: 17, color: AppColors.accentOrange),
-                    tooltip: 'Bulk paste timestamps or CSV', splashRadius: 16,
+                    icon: const Icon(Icons.playlist_add_check, size: 16, color: AppColors.accentOrange),
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    tooltip: 'Bulk paste timestamps or CSV', splashRadius: 14,
                     onPressed: () => showDialog(context: context, builder: (_) => const BulkTimestampDialog()),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.folder_open, size: 17, color: AppColors.accentOrange),
-                    tooltip: 'Import folder of images', splashRadius: 16,
+                    icon: const Icon(Icons.folder_open, size: 16, color: AppColors.accentOrange),
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    tooltip: 'Import folder of images', splashRadius: 14,
                     onPressed: _pickFolder,
                   ),
                   const SizedBox(width: 4),
@@ -97,6 +108,7 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                       backgroundColor: btnColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      minimumSize: const Size(0, 28),
                       textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                     ),

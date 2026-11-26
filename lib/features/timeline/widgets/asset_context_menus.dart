@@ -338,17 +338,18 @@ class AssetContextMenus {
     final selected = await showMenu<String>(
       context: context,
       color: AppColors.surface,
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 420),
       position: RelativeRect.fromLTRB(globalPosition.dx, globalPosition.dy, globalPosition.dx, globalPosition.dy),
       items: [
         if (hasEmptyRange && onFillEmptyWithMedia != null)
           PopupMenuItem(
             value: 'fill_empty_media',
-            child: Row(children: [const Icon(Icons.add_photo_alternate, size: 15, color: AppColors.clipBlueLight), const SizedBox(width: 8), Text('Fill Space ($emptyLabel) with Image/Video...', style: const TextStyle(fontSize: 12, color: Colors.white))]),
+            child: Row(children: [const Icon(Icons.add_photo_alternate, size: 15, color: AppColors.clipBlueLight), const SizedBox(width: 8), Flexible(child: Text('Fill Space ($emptyLabel) with Image/Video...', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white)))]),
           ),
         if (hasEmptyRange && onFillEmptyWithColor != null)
           PopupMenuItem(
             value: 'fill_empty_color',
-            child: Row(children: [const Icon(Icons.palette, size: 15, color: Colors.purpleAccent), const SizedBox(width: 8), Text('Fill Space ($emptyLabel) with Background', style: const TextStyle(fontSize: 12, color: Colors.white))]),
+            child: Row(children: [const Icon(Icons.palette, size: 15, color: Colors.purpleAccent), const SizedBox(width: 8), Flexible(child: Text('Fill Space ($emptyLabel) with Background', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white)))]),
           ),
         if (hasEmptyRange) const PopupMenuDivider(),
         if (isMedia && onAddMedia != null)
