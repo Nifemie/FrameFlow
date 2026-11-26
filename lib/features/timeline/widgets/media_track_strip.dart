@@ -150,6 +150,7 @@ class MediaTrackStrip extends ConsumerWidget {
 
     if (images.isEmpty) {
       return GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onSecondaryTapUp: (details) => _openTimelineMenuAt(context, ref, details),
         child: DragTarget<ImageItem>(
           onWillAcceptWithDetails: (_) => true,
@@ -211,6 +212,7 @@ class MediaTrackStrip extends ConsumerWidget {
     }
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onSecondaryTapUp: (details) => _openTimelineMenuAt(context, ref, details),
       child: DragTarget<ImageItem>(
         onWillAcceptWithDetails: (_) => true,
@@ -230,7 +232,7 @@ class MediaTrackStrip extends ConsumerWidget {
           decoration: isDropHover ? BoxDecoration(
             border: Border.all(color: AppColors.accentOrange, width: 1.5),
             borderRadius: BorderRadius.circular(4),
-          ) : null,
+          ) : const BoxDecoration(color: Colors.transparent),
           child: Stack(
             children: [
               ..._buildGaps(ref),
