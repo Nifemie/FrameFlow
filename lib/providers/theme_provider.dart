@@ -3,6 +3,69 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class StudioIconDef {
+  final String id;
+  final String label;
+  final String group;
+  final IconData icon;
+  final Color defaultColor;
+
+  const StudioIconDef({
+    required this.id,
+    required this.label,
+    required this.group,
+    required this.icon,
+    required this.defaultColor,
+  });
+}
+
+class StudioIconCatalog {
+  static const List<StudioIconDef> all = [
+    // Top Bar
+    StudioIconDef(id: 'newProject', label: 'New Project', group: 'Top Bar', icon: Icons.note_add_outlined, defaultColor: Color(0xFFF3F4F6)),
+    StudioIconDef(id: 'openProject', label: 'Open Project', group: 'Top Bar', icon: Icons.folder_open_outlined, defaultColor: Color(0xFFF3F4F6)),
+    StudioIconDef(id: 'saveProject', label: 'Save Project', group: 'Top Bar', icon: Icons.save_outlined, defaultColor: Color(0xFFF3F4F6)),
+    StudioIconDef(id: 'undo', label: 'Undo', group: 'Top Bar', icon: Icons.undo, defaultColor: Color(0xFFF3F4F6)),
+    StudioIconDef(id: 'redo', label: 'Redo', group: 'Top Bar', icon: Icons.redo, defaultColor: Color(0xFFF3F4F6)),
+    StudioIconDef(id: 'timingMode', label: 'Timing Mode', group: 'Top Bar', icon: Icons.bolt, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'workspaceFocus', label: 'Workspace Focus', group: 'Top Bar', icon: Icons.grid_view_rounded, defaultColor: Color(0xFF9CA3AF)),
+    StudioIconDef(id: 'themeCustomize', label: 'Customize Theme', group: 'Top Bar', icon: Icons.palette_outlined, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'shortcuts', label: 'Keyboard Shortcuts', group: 'Top Bar', icon: Icons.keyboard_outlined, defaultColor: Color(0xFF9CA3AF)),
+    StudioIconDef(id: 'exportVideo', label: 'Export Video', group: 'Top Bar', icon: Icons.file_upload_outlined, defaultColor: Color(0xFFFFFFFF)),
+
+    // Left Panel
+    StudioIconDef(id: 'importVoiceOver', label: 'Import Voice-Over', group: 'Left Panel', icon: Icons.audio_file_outlined, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'addColorMatte', label: 'Add Color Matte', group: 'Left Panel', icon: Icons.palette_outlined, defaultColor: Colors.purpleAccent),
+    StudioIconDef(id: 'bulkTimestamps', label: 'Bulk Timestamps', group: 'Left Panel', icon: Icons.playlist_add_check, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'importFolder', label: 'Import Folder', group: 'Left Panel', icon: Icons.folder_open, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'addMedia', label: 'Add Media', group: 'Left Panel', icon: Icons.add_photo_alternate, defaultColor: Color(0xFFFFFFFF)),
+
+    // Viewport Controls
+    StudioIconDef(id: 'prevCut', label: 'Previous Cut', group: 'Viewport Controls', icon: Icons.skip_previous, defaultColor: Color(0xFFF3F4F6)),
+    StudioIconDef(id: 'playPause', label: 'Play / Pause', group: 'Viewport Controls', icon: Icons.play_arrow, defaultColor: Color(0xFFFFFFFF)),
+    StudioIconDef(id: 'nextCut', label: 'Next Cut', group: 'Viewport Controls', icon: Icons.skip_next, defaultColor: Color(0xFFF3F4F6)),
+    StudioIconDef(id: 'stampCut', label: 'Stamp Cut (M)', group: 'Viewport Controls', icon: Icons.bookmark_add, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'splitClip', label: 'Split Clip (S)', group: 'Viewport Controls', icon: Icons.content_cut, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'aspectRatio', label: 'Aspect Ratio', group: 'Viewport Controls', icon: Icons.aspect_ratio, defaultColor: Color(0xFF9CA3AF)),
+
+    // Timeline & Tracks
+    StudioIconDef(id: 'timelineHeader', label: 'Timeline Header', group: 'Timeline & Tracks', icon: Icons.view_timeline_rounded, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'snapToggle', label: 'Snap Toggle', group: 'Timeline & Tracks', icon: Icons.vertical_align_center, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'markK', label: 'Mark (K)', group: 'Timeline & Tracks', icon: Icons.bookmark_add_outlined, defaultColor: Colors.amber),
+    StudioIconDef(id: 'packLeft', label: 'Pack Left', group: 'Timeline & Tracks', icon: Icons.format_align_left, defaultColor: Colors.cyanAccent),
+    StudioIconDef(id: 'zoomOutIn', label: 'Zoom Out / In', group: 'Timeline & Tracks', icon: Icons.zoom_in, defaultColor: Color(0xFF9CA3AF)),
+    StudioIconDef(id: 'zoomFit', label: 'Zoom Fit', group: 'Timeline & Tracks', icon: Icons.fit_screen_rounded, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'randomiseAnim', label: 'Randomise Animations', group: 'Timeline & Tracks', icon: Icons.auto_awesome, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'addTrack', label: 'Add Track', group: 'Timeline & Tracks', icon: Icons.add, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'trackVisibility', label: 'Track Visibility (Eye)', group: 'Timeline & Tracks', icon: Icons.visibility, defaultColor: Color(0xFFF3F4F6)),
+    StudioIconDef(id: 'trackMute', label: 'Track Mute', group: 'Timeline & Tracks', icon: Icons.volume_up, defaultColor: Color(0xFFF3F4F6)),
+    StudioIconDef(id: 'trackTimestamp', label: 'Track Timestamps', group: 'Timeline & Tracks', icon: Icons.access_time, defaultColor: Color(0xFFFF6600)),
+    StudioIconDef(id: 'trackAddBg', label: 'Track Add Background', group: 'Timeline & Tracks', icon: Icons.palette_outlined, defaultColor: Colors.purpleAccent),
+    StudioIconDef(id: 'trackAddMedia', label: 'Track Add Media', group: 'Timeline & Tracks', icon: Icons.add_photo_alternate_outlined, defaultColor: Color(0xFF60A5FA)),
+    StudioIconDef(id: 'trackDelete', label: 'Track Delete', group: 'Timeline & Tracks', icon: Icons.delete_outline, defaultColor: Color(0xFFEF4444)),
+  ];
+}
+
 class StudioThemeColors {
   final String presetName; // 'default', 'black', 'custom'
   final Color topPanelColor;
@@ -15,6 +78,7 @@ class StudioThemeColors {
   final Color buttonColor;
   final Color playheadColor;
   final Color exportColor;
+  final Map<String, Color> iconColors;
 
   const StudioThemeColors({
     required this.presetName,
@@ -28,7 +92,10 @@ class StudioThemeColors {
     required this.buttonColor,
     required this.playheadColor,
     required this.exportColor,
+    this.iconColors = const {},
   });
+
+  Color iconColor(String id, Color fallback) => iconColors[id] ?? fallback;
 
   static const StudioThemeColors defaultTheme = StudioThemeColors(
     presetName: 'default',
@@ -42,6 +109,7 @@ class StudioThemeColors {
     buttonColor: Color(0xFFFF6600),
     playheadColor: Color(0xFFFF6600),
     exportColor: Color(0xFF10B981),
+    iconColors: {},
   );
 
   static const StudioThemeColors blackTheme = StudioThemeColors(
@@ -56,6 +124,7 @@ class StudioThemeColors {
     buttonColor: Color(0xFFFF6600),
     playheadColor: Color(0xFFFF6600),
     exportColor: Color(0xFF10B981),
+    iconColors: {},
   );
 
   StudioThemeColors copyWith({
@@ -70,6 +139,7 @@ class StudioThemeColors {
     Color? buttonColor,
     Color? playheadColor,
     Color? exportColor,
+    Map<String, Color>? iconColors,
   }) {
     return StudioThemeColors(
       presetName: presetName ?? this.presetName,
@@ -83,6 +153,7 @@ class StudioThemeColors {
       buttonColor: buttonColor ?? this.buttonColor,
       playheadColor: playheadColor ?? this.playheadColor,
       exportColor: exportColor ?? this.exportColor,
+      iconColors: iconColors ?? this.iconColors,
     );
   }
 
@@ -98,12 +169,21 @@ class StudioThemeColors {
         'buttonColor': buttonColor.toARGB32(),
         'playheadColor': playheadColor.toARGB32(),
         'exportColor': exportColor.toARGB32(),
+        'iconColors': iconColors.map((k, v) => MapEntry(k, v.toARGB32())),
       };
 
   factory StudioThemeColors.fromMap(Map<String, dynamic> map) {
     Color c(String key, Color fallback) {
       final v = map[key];
       return v is int ? Color(v) : fallback;
+    }
+
+    final rawIcons = map['iconColors'] as Map<String, dynamic>? ?? const {};
+    final parsedIcons = <String, Color>{};
+    for (final e in rawIcons.entries) {
+      if (e.value is int) {
+        parsedIcons[e.key] = Color(e.value as int);
+      }
     }
 
     return StudioThemeColors(
@@ -118,6 +198,7 @@ class StudioThemeColors {
       buttonColor: c('buttonColor', defaultTheme.buttonColor),
       playheadColor: c('playheadColor', defaultTheme.playheadColor),
       exportColor: c('exportColor', defaultTheme.exportColor),
+      iconColors: parsedIcons,
     );
   }
 }
@@ -185,6 +266,18 @@ class ThemeNotifier extends StateNotifier<StudioThemeColors> {
 
   void applySavedTheme(SavedCustomTheme saved) {
     state = saved.colors.copyWith(presetName: 'saved:${saved.id}');
+    _save();
+  }
+
+  void updateIconColor(String iconId, Color color) {
+    final next = Map<String, Color>.from(state.iconColors);
+    next[iconId] = color;
+    state = state.copyWith(presetName: 'custom', iconColors: next);
+    _save();
+  }
+
+  void resetIconColors() {
+    state = state.copyWith(presetName: 'custom', iconColors: const {});
     _save();
   }
 

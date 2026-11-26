@@ -80,21 +80,21 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.palette_outlined, size: 16, color: Colors.purpleAccent),
+                    icon: Icon(Icons.palette_outlined, size: 16, color: theme.iconColor('addColorMatte', Colors.purpleAccent)),
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                     tooltip: 'Add Color Matte to ${_targetTrack == "track_bg" ? "Underlay Track" : "Selected Track"}', splashRadius: 14,
                     onPressed: () => ref.read(projectProvider.notifier).addColorBackground(trackId: _targetTrack == 'all' ? 'track_v1' : _targetTrack),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.playlist_add_check, size: 16, color: AppColors.accentOrange),
+                    icon: Icon(Icons.playlist_add_check, size: 16, color: theme.iconColor('bulkTimestamps', theme.buttonColor)),
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                     tooltip: 'Bulk paste timestamps or CSV', splashRadius: 14,
                     onPressed: () => showDialog(context: context, builder: (_) => const BulkTimestampDialog()),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.folder_open, size: 16, color: AppColors.accentOrange),
+                    icon: Icon(Icons.folder_open, size: 16, color: theme.iconColor('importFolder', theme.buttonColor)),
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                     tooltip: 'Import folder of images', splashRadius: 14,
@@ -111,7 +111,7 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                     ),
                     onPressed: _pickImages,
-                    icon: const Icon(Icons.add_photo_alternate, size: 13),
+                    icon: Icon(Icons.add_photo_alternate, size: 13, color: theme.iconColor('addMedia', Colors.white)),
                     label: const Text('Add'),
                   ),
                 ],

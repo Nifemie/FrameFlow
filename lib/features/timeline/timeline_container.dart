@@ -220,7 +220,7 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
             ),
             child: Row(
               children: [
-                Icon(Icons.view_timeline_rounded, size: 14, color: theme.buttonColor),
+                Icon(Icons.view_timeline_rounded, size: 14, color: theme.iconColor('timelineHeader', theme.buttonColor)),
                 const SizedBox(width: 6),
                 Text(
                   'TIMELINE',
@@ -249,7 +249,7 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.vertical_align_center, size: 11, color: snapOn ? AppColors.accentOrange : AppColors.textMuted),
+                            Icon(Icons.vertical_align_center, size: 11, color: snapOn ? theme.iconColor('snapToggle', theme.buttonColor) : AppColors.textMuted),
                             const SizedBox(width: 4),
                             Text(
                               snapOn ? 'Snap ON' : 'Snap OFF',
@@ -276,12 +276,12 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: AppColors.surfaceBorder),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.bookmark_add_outlined, size: 11, color: Colors.amber),
-                        SizedBox(width: 4),
-                        Text('Mark (K)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                        Icon(Icons.bookmark_add_outlined, size: 11, color: theme.iconColor('markK', Colors.amber)),
+                        const SizedBox(width: 4),
+                        const Text('Mark (K)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
                       ],
                     ),
                   ),
@@ -298,19 +298,19 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: AppColors.surfaceBorder),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.format_align_left, size: 11, color: Colors.cyanAccent),
-                        SizedBox(width: 4),
-                        Text('Pack Left', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                        Icon(Icons.format_align_left, size: 11, color: theme.iconColor('packLeft', Colors.cyanAccent)),
+                        const SizedBox(width: 4),
+                        const Text('Pack Left', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
                       ],
                     ),
                   ),
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.remove, size: 14, color: AppColors.textSecondary),
+                  icon: Icon(Icons.remove, size: 14, color: theme.iconColor('zoomOutIn', AppColors.textSecondary)),
                   tooltip: 'Zoom Out (-)',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -345,7 +345,7 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                 ),
                 const SizedBox(width: 4),
                 IconButton(
-                  icon: const Icon(Icons.add, size: 14, color: AppColors.textSecondary),
+                  icon: Icon(Icons.add, size: 14, color: theme.iconColor('zoomOutIn', AppColors.textSecondary)),
                   tooltip: 'Zoom In (+)',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -366,12 +366,12 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: AppColors.surfaceBorder),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.fit_screen_rounded, size: 11, color: AppColors.accentOrange),
-                        SizedBox(width: 4),
-                        Text('Fit', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                        Icon(Icons.fit_screen_rounded, size: 11, color: theme.iconColor('zoomFit', theme.buttonColor)),
+                        const SizedBox(width: 4),
+                        const Text('Fit', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
                       ],
                     ),
                   ),

@@ -32,7 +32,8 @@ class LiveStampButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final btnColor = ref.watch(themeProvider.select((t) => t.buttonColor));
+    final theme = ref.watch(themeProvider);
+    final btnColor = theme.buttonColor;
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         backgroundColor: btnColor.withValues(alpha: 0.15),
@@ -42,7 +43,7 @@ class LiveStampButton extends ConsumerWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),
       onPressed: () => stampCut(context, ref),
-      icon: const Icon(Icons.bookmark_add, size: 14),
+      icon: Icon(Icons.bookmark_add, size: 14, color: theme.iconColor('stampCut', btnColor)),
       label: const Text(
         'Stamp Cut (M)',
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),

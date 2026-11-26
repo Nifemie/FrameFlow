@@ -52,7 +52,7 @@ class TransportControls extends ConsumerWidget {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.skip_previous, size: 18),
-                        color: theme.textColor,
+                        color: theme.iconColor('prevCut', theme.textColor),
                         tooltip: 'Previous Image Cut',
                         padding: const EdgeInsets.all(6),
                         constraints: const BoxConstraints(),
@@ -68,7 +68,7 @@ class TransportControls extends ConsumerWidget {
                           icon: Icon(
                             isPlaying ? Icons.pause : Icons.play_arrow,
                             size: 20,
-                            color: Colors.white,
+                            color: theme.iconColor('playPause', Colors.white),
                           ),
                           padding: const EdgeInsets.all(7),
                           constraints: const BoxConstraints(),
@@ -79,7 +79,7 @@ class TransportControls extends ConsumerWidget {
                       const SizedBox(width: 8),
                       IconButton(
                         icon: const Icon(Icons.skip_next, size: 18),
-                        color: theme.textColor,
+                        color: theme.iconColor('nextCut', theme.textColor),
                         tooltip: 'Next Image Cut',
                         padding: const EdgeInsets.all(6),
                         constraints: const BoxConstraints(),
@@ -122,7 +122,7 @@ class TransportControls extends ConsumerWidget {
                             );
                           }
                         },
-                        icon: const Icon(Icons.content_cut, size: 14),
+                        icon: Icon(Icons.content_cut, size: 14, color: theme.iconColor('splitClip', theme.buttonColor)),
                         label: const Text(
                           'Split (S)',
                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
@@ -138,7 +138,7 @@ class TransportControls extends ConsumerWidget {
                     child: DropdownButton<VideoAspectRatio>(
                       value: project.aspectRatio,
                       dropdownColor: AppColors.surfaceLight,
-                      icon: const Icon(Icons.aspect_ratio, size: 15, color: AppColors.textSecondary),
+                      icon: Icon(Icons.aspect_ratio, size: 15, color: theme.iconColor('aspectRatio', AppColors.textSecondary)),
                       style: const TextStyle(fontSize: 11, color: AppColors.textPrimary),
                       items: VideoAspectRatio.values.map((ratio) {
                         return DropdownMenuItem(

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../providers/theme_provider.dart';
 import 'advanced_color_picker_dialog.dart';
+import 'icon_colors_dialog.dart';
 
 class ThemeCustomizerDialog extends ConsumerWidget {
   const ThemeCustomizerDialog({super.key});
@@ -179,6 +180,38 @@ class ThemeCustomizerDialog extends ConsumerWidget {
 
               const SizedBox(height: 14),
               const Divider(height: 1, color: AppColors.surfaceBorder),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => const IconColorsDialog(),
+                ),
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: theme.buttonColor.withValues(alpha: 0.6), width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.apps, size: 17, color: theme.buttonColor),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Icons', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                            Text('Customize individual colors for all software icons', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
               const Text('Custom Colors (Wheel, HSL, RGB & Recommended)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
               const SizedBox(height: 8),

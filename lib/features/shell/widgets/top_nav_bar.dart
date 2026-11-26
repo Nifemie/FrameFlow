@@ -90,9 +90,9 @@ class TopNavBar extends ConsumerWidget {
               const SizedBox(width: 2),
 
               // File actions
-              IconButton(icon: const Icon(Icons.note_add_outlined, size: 17), tooltip: 'New (Ctrl+N)', splashRadius: 16, onPressed: notifier.newProject),
-              IconButton(icon: const Icon(Icons.folder_open_outlined, size: 17), tooltip: 'Open (Ctrl+O)', splashRadius: 16, onPressed: () => _open(context, ref)),
-              IconButton(icon: const Icon(Icons.save_outlined, size: 17), tooltip: 'Save (Ctrl+S)', splashRadius: 16, onPressed: () => _save(context, ref)),
+              IconButton(icon: Icon(Icons.note_add_outlined, size: 17, color: theme.iconColor('newProject', theme.textColor)), tooltip: 'New (Ctrl+N)', splashRadius: 16, onPressed: notifier.newProject),
+              IconButton(icon: Icon(Icons.folder_open_outlined, size: 17, color: theme.iconColor('openProject', theme.textColor)), tooltip: 'Open (Ctrl+O)', splashRadius: 16, onPressed: () => _open(context, ref)),
+              IconButton(icon: Icon(Icons.save_outlined, size: 17, color: theme.iconColor('saveProject', theme.textColor)), tooltip: 'Save (Ctrl+S)', splashRadius: 16, onPressed: () => _save(context, ref)),
 
               const SizedBox(width: 2),
               IconButton(
@@ -100,14 +100,14 @@ class TopNavBar extends ConsumerWidget {
                 tooltip: 'Undo (Ctrl+Z)',
                 splashRadius: 16,
                 onPressed: notifier.canUndo ? notifier.undo : null,
-                color: notifier.canUndo ? AppColors.textPrimary : AppColors.textMuted.withValues(alpha: 0.4),
+                color: notifier.canUndo ? theme.iconColor('undo', theme.textColor) : AppColors.textMuted.withValues(alpha: 0.4),
               ),
               IconButton(
                 icon: const Icon(Icons.redo, size: 17),
                 tooltip: 'Redo (Ctrl+Y)',
                 splashRadius: 16,
                 onPressed: notifier.canRedo ? notifier.redo : null,
-                color: notifier.canRedo ? AppColors.textPrimary : AppColors.textMuted.withValues(alpha: 0.4),
+                color: notifier.canRedo ? theme.iconColor('redo', theme.textColor) : AppColors.textMuted.withValues(alpha: 0.4),
               ),
 
               const SizedBox(width: 2),
@@ -162,7 +162,7 @@ class TopNavBar extends ConsumerWidget {
                       Icon(
                         project.timingMode == TimingMode.automatic ? Icons.bolt : Icons.tune,
                         size: 12,
-                        color: theme.buttonColor,
+                        color: theme.iconColor('timingMode', theme.buttonColor),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -197,14 +197,14 @@ class TopNavBar extends ConsumerWidget {
 
               // Theme & Color Customizer button
               IconButton(
-                icon: Icon(Icons.palette_outlined, size: 18, color: theme.buttonColor),
+                icon: Icon(Icons.palette_outlined, size: 18, color: theme.iconColor('themeCustomize', theme.buttonColor)),
                 tooltip: 'Customize Theme & Colors',
                 splashRadius: 16,
                 onPressed: () => showDialog(context: context, builder: (_) => const ThemeCustomizerDialog()),
               ),
               // Shortcuts info button
               IconButton(
-                icon: const Icon(Icons.keyboard_outlined, size: 18, color: AppColors.textSecondary),
+                icon: Icon(Icons.keyboard_outlined, size: 18, color: theme.iconColor('shortcuts', AppColors.textSecondary)),
                 tooltip: 'Keyboard Shortcuts',
                 splashRadius: 16,
                 onPressed: () => showDialog(context: context, builder: (_) => const ShortcutsDialog()),
@@ -220,7 +220,7 @@ class TopNavBar extends ConsumerWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                 ),
                 onPressed: () => showDialog(context: context, builder: (_) => const ExportDialog()),
-                icon: const Icon(Icons.file_upload_outlined, size: 15),
+                icon: Icon(Icons.file_upload_outlined, size: 15, color: theme.iconColor('exportVideo', Colors.white)),
                 label: Text(
                   isVeryCompact ? 'Export' : 'Export Video',
                   style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
@@ -379,7 +379,7 @@ class TopNavBar extends ConsumerWidget {
           child: Icon(
             icon,
             size: 16,
-            color: isActive ? btnColor : AppColors.textSecondary,
+            color: isActive ? btnColor : ref.watch(themeProvider.select((t) => t.iconColor('workspaceFocus', AppColors.textSecondary))),
           ),
         ),
       ),

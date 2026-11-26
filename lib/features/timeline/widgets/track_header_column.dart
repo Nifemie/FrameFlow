@@ -57,7 +57,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                   children: [
                     IconButton(
                       tooltip: 'Randomise Animations',
-                      icon: const Icon(Icons.auto_awesome, size: 14, color: AppColors.accentOrange),
+                      icon: Icon(Icons.auto_awesome, size: 14, color: theme.iconColor('randomiseAnim', theme.buttonColor)),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: () => showDialog(context: context, builder: (_) => const AnimationRandomisationDialog()),
@@ -65,7 +65,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                     const SizedBox(width: 6),
                     PopupMenuButton<String>(
                       tooltip: 'Add Track Layer',
-                      icon: const Icon(Icons.add, size: 16, color: AppColors.accentOrange),
+                      icon: Icon(Icons.add, size: 16, color: theme.iconColor('addTrack', theme.buttonColor)),
                       padding: EdgeInsets.zero,
                       color: AppColors.surface,
                       onSelected: (val) {
@@ -161,7 +161,10 @@ class TrackHeaderColumn extends ConsumerWidget {
     VoidCallback? onAddMedia, VoidCallback? onAddBg, VoidCallback? onAutoArrange, VoidCallback? onTimestamp, VoidCallback? onDelete,
     VoidCallback? onTap, VoidCallback? onRename, void Function(TapUpDetails)? onSecondaryTapUp,
   }) {
-    return GestureDetector(
+    return Consumer(
+      builder: (context, ref, _) {
+        final theme = ref.watch(themeProvider);
+        return GestureDetector(
       onSecondaryTapUp: onSecondaryTapUp,
       child: Opacity(
         opacity: isVisible ? 1.0 : 0.48,
@@ -187,12 +190,12 @@ class TrackHeaderColumn extends ConsumerWidget {
                   ),
                 ),
               ),
-              IconButton(icon: Icon(isVisible ? Icons.visibility : Icons.visibility_off, size: 13, color: isVisible ? AppColors.textPrimary : AppColors.textMuted), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onToggleVis),
+              IconButton(icon: Icon(isVisible ? Icons.visibility : Icons.visibility_off, size: 13, color: isVisible ? theme.iconColor('trackVisibility', theme.textColor) : AppColors.textMuted), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onToggleVis),
               if (height <= 40 && onTimestamp != null) ...[
                 const SizedBox(width: 4),
                 IconButton(
                   tooltip: 'Set / Import Timestamps',
-                  icon: const Icon(Icons.access_time, size: 13, color: AppColors.accentOrange),
+                  icon: Icon(Icons.access_time, size: 13, color: theme.iconColor('trackTimestamp', theme.buttonColor)),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: onTimestamp,
@@ -202,7 +205,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                 const SizedBox(width: 4),
                 IconButton(
                   tooltip: isMuted ? 'Unmute Track' : 'Mute Track',
-                  icon: Icon(isMuted ? Icons.volume_off : Icons.volume_up, size: 13, color: isMuted ? AppColors.errorRed : AppColors.textPrimary),
+                  icon: Icon(isMuted ? Icons.volume_off : Icons.volume_up, size: 13, color: isMuted ? AppColors.errorRed : theme.iconColor('trackMute', theme.textColor)),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: onToggleMute,
@@ -212,7 +215,7 @@ class TrackHeaderColumn extends ConsumerWidget {
                 const SizedBox(width: 4),
                 IconButton(
                   tooltip: 'Delete / Clear Track',
-                  icon: const Icon(Icons.delete_outline, size: 12, color: AppColors.errorRed),
+                  icon: Icon(Icons.delete_outline, size: 12, color: theme.iconColor('trackDelete', AppColors.errorRed)),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: onDelete,
@@ -224,18 +227,18 @@ class TrackHeaderColumn extends ConsumerWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                if (onTimestamp != null) IconButton(tooltip: 'Import Timestamps', icon: const Icon(Icons.access_time, size: 13, color: AppColors.accentOrange), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onTimestamp),
+                if (onTimestamp != null) IconButton(tooltip: 'Import Timestamps', icon: Icon(Icons.access_time, size: 13, color: theme.iconColor('trackTimestamp', theme.buttonColor)), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onTimestamp),
                 if (onAddBg != null) ...[
                   const SizedBox(width: 6),
-                  IconButton(tooltip: 'Add Solid Color Background', icon: const Icon(Icons.palette_outlined, size: 13, color: Colors.purpleAccent), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onAddBg),
+                  IconButton(tooltip: 'Add Solid Color Background', icon: Icon(Icons.palette_outlined, size: 13, color: theme.iconColor('trackAddBg', Colors.purpleAccent)), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onAddBg),
                 ],
                 if (onAddMedia != null) ...[
                   const SizedBox(width: 6),
-                  IconButton(tooltip: 'Add Media / Images', icon: const Icon(Icons.add_photo_alternate_outlined, size: 13, color: AppColors.clipBlueLight), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onAddMedia),
+                  IconButton(tooltip: 'Add Media / Images', icon: Icon(Icons.add_photo_alternate_outlined, size: 13, color: theme.iconColor('trackAddMedia', AppColors.clipBlueLight)), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onAddMedia),
                 ],
                 if (onAutoArrange != null) ...[
                   const SizedBox(width: 6),
-                  IconButton(tooltip: 'Auto-Rearrange from Left (Pack)', icon: const Icon(Icons.format_align_left, size: 13, color: Colors.cyanAccent), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onAutoArrange),
+                  IconButton(tooltip: 'Auto-Rearrange from Left (Pack)', icon: Icon(Icons.format_align_left, size: 13, color: theme.iconColor('packLeft', Colors.cyanAccent)), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onAutoArrange),
                 ],
               ],
             ),
@@ -246,5 +249,7 @@ class TrackHeaderColumn extends ConsumerWidget {
     ),
     ),
   );
+      },
+    );
 }
 }

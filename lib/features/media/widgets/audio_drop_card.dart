@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/time_parser.dart';
 import '../../../models/voice_over.dart';
 import '../../../providers/project_provider.dart';
+import '../../../providers/theme_provider.dart';
 import '../../../services/audio_probe_service.dart';
 
 class AudioDropCard extends ConsumerWidget {
@@ -85,21 +86,22 @@ class AudioDropCard extends ConsumerWidget {
       );
     }
 
+    final theme = ref.watch(themeProvider);
     return Container(
       margin: const EdgeInsets.all(8),
       child: OutlinedButton.icon(
         style: OutlinedButton.styleFrom(
-          backgroundColor: AppColors.accentOrange.withValues(alpha: 0.08),
-          foregroundColor: Colors.white,
-          side: BorderSide(color: AppColors.accentOrange.withValues(alpha: 0.6), width: 1.2),
+          backgroundColor: theme.buttonColor.withValues(alpha: 0.08),
+          foregroundColor: theme.textColor,
+          side: BorderSide(color: theme.buttonColor.withValues(alpha: 0.6), width: 1.2),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         ),
         onPressed: () => _pickAudio(context, ref),
-        icon: const Icon(Icons.audio_file_outlined, color: AppColors.accentOrange, size: 18),
-        label: const Text(
+        icon: Icon(Icons.audio_file_outlined, color: theme.iconColor('importVoiceOver', theme.buttonColor), size: 18),
+        label: Text(
           'Import Voice-Over Audio',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.textColor),
         ),
       ),
     );
