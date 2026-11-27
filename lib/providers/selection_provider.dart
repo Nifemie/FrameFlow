@@ -38,6 +38,21 @@ final timelineZoomProvider = StateProvider<double>((ref) => 1.0);
 /// Tracks whether CapCut-style magnetic snapping is active on the timeline.
 final snappingEnabledProvider = StateProvider<bool>((ref) => true);
 
+/// Preview playback decoding quality (controls decode resolution for smooth scrubbing/playback).
+enum PreviewQuality {
+  high('High', null),
+  standard('Standard', 1280),
+  medium('Medium', 854),
+  low('Low', 640),
+  veryLow('Very Low', 360);
+
+  final String label;
+  final int? cacheWidth;
+  const PreviewQuality(this.label, this.cacheWidth);
+}
+
+final previewQualityProvider = StateProvider<PreviewQuality>((ref) => PreviewQuality.standard);
+
 /// Holds the active snap guide line position in milliseconds while dragging/trimming.
 final activeSnapLineMsProvider = StateProvider<int?>((ref) => null);
 

@@ -60,6 +60,9 @@ class _PreviewCanvasState extends ConsumerState<PreviewCanvas> {
   }
 
   void _prefetch() {
+    final quality = ref.read(previewQualityProvider);
+    final cacheW = quality.cacheWidth;
+
     for (final l in widget.activeLayers) {
       if (l.image.isVideo) {
         if (VideoMetadataService.getCachedThumbnail(l.image.filePath) == null) {
@@ -69,10 +72,28 @@ class _PreviewCanvasState extends ConsumerState<PreviewCanvas> {
         }
         final offset = (widget.playheadMs - l.image.startMs).clamp(0, l.image.durationMs);
         VideoPlaybackEngine.prepareVideo(l.image, offset);
-      } else if (!l.image.isColorBackground && ImageDimensionService.getSize(l.image.filePath) == null) {
-        ImageDimensionService.resolve(l.image.filePath).then((size) {
-          if (size != null && mounted) setState(() {});
-        });
+      } else if (!l.image.isColorBackground) {
+        if (ImageDimensionService.getSize(l.image.filePath) == null) {
+          ImageDimensionService.resolve(l.image.filePath).then((size) {
+            if (size != null && mounted) setState(() {});
+          });
+        }
+        final f = File(l.image.filePath);
+        if (f.existsSync()) {
+          precacheImage(ResizeImage.resizeIfNeeded(cacheW, null, FileImage(f)), context);
+        }
+      }
+    }
+
+    // Pre-cache upcoming 3 images ahead of the playhead so transitions never blink
+    final allImages = ref.read(projectProvider).images;
+    final upcoming = allImages
+        .where((i) => !i.isVideo && !i.isColorBackground && i.startMs >= widget.playheadMs)
+        .take(4);
+    for (final img in upcoming) {
+      final f = File(img.filePath);
+      if (f.existsSync()) {
+        precacheImage(ResizeImage.resizeIfNeeded(cacheW, null, FileImage(f)), context);
       }
     }
   }
@@ -85,23 +106,24 @@ class _PreviewCanvasState extends ConsumerState<PreviewCanvas> {
       return _buildVideoContent(item);
     }
 
+    final cacheW = ref.watch(previewQualityProvider).cacheWidth;
     final imageFile = File(item.filePath);
     switch (item.fitMode) {
       case ImageFitMode.fit:
-        return Center(child: Image.file(imageFile, cacheWidth: 1920, fit: BoxFit.contain, errorBuilder: (_, err, _) => _buildError(err)));
+        return Center(child: Image.file(imageFile, cacheWidth: cacheW, gaplessPlayback: true, fit: BoxFit.contain, errorBuilder: (_, err, _) => _buildError(err)));
       case ImageFitMode.fill:
-        return Image.file(imageFile, cacheWidth: 1920, fit: BoxFit.cover, width: double.infinity, height: double.infinity, errorBuilder: (_, err, _) => _buildError(err));
+        return Image.file(imageFile, cacheWidth: cacheW, gaplessPlayback: true, fit: BoxFit.cover, width: double.infinity, height: double.infinity, errorBuilder: (_, err, _) => _buildError(err));
       case ImageFitMode.blurredBackground:
         return Stack(
           fit: StackFit.expand,
           children: [
-            ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: 20, sigmaY: 20), child: Image.file(imageFile, cacheWidth: 200, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink())),
+            ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: 20, sigmaY: 20), child: Image.file(imageFile, cacheWidth: 200, gaplessPlayback: true, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink())),
             Container(color: Colors.black.withValues(alpha: 0.3)),
-            Center(child: Image.file(imageFile, cacheWidth: 1920, fit: BoxFit.contain, errorBuilder: (_, err, _) => _buildError(err))),
+            Center(child: Image.file(imageFile, cacheWidth: cacheW, gaplessPlayback: true, fit: BoxFit.contain, errorBuilder: (_, err, _) => _buildError(err))),
           ],
         );
       case ImageFitMode.center:
-        return Center(child: Image.file(imageFile, cacheWidth: 1920, fit: BoxFit.none, errorBuilder: (_, err, _) => _buildError(err)));
+        return Center(child: Image.file(imageFile, cacheWidth: cacheW, gaplessPlayback: true, fit: BoxFit.none, errorBuilder: (_, err, _) => _buildError(err)));
     }
   }
 
@@ -126,9 +148,10 @@ class _PreviewCanvasState extends ConsumerState<PreviewCanvas> {
         break;
     }
 
+    final cacheW = ref.watch(previewQualityProvider).cacheWidth;
     final thumbPath = VideoMetadataService.getCachedThumbnail(item.filePath);
     final fallbackWidget = (thumbPath != null && File(thumbPath).existsSync())
-        ? Image.file(File(thumbPath), cacheWidth: 1920, fit: boxFit)
+        ? Image.file(File(thumbPath), cacheWidth: cacheW, gaplessPlayback: true, fit: boxFit)
         : Container(
             color: Colors.black,
             child: const Center(

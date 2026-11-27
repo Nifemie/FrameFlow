@@ -133,6 +133,37 @@ class TransportControls extends ConsumerWidget {
 
                   const SizedBox(width: 8),
 
+                  // Preview Quality Dropdown
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final quality = ref.watch(previewQualityProvider);
+                      return Tooltip(
+                        message: 'Preview Playback Quality',
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<PreviewQuality>(
+                            value: quality,
+                            dropdownColor: AppColors.surfaceLight,
+                            icon: Icon(Icons.high_quality_outlined, size: 15, color: theme.iconColor('previewQuality', AppColors.textSecondary)),
+                            style: TextStyle(fontSize: 11, color: theme.textColor),
+                            items: PreviewQuality.values.map((q) {
+                              return DropdownMenuItem(
+                                value: q,
+                                child: Text(isNarrow ? q.label.split(' ').first : q.label),
+                              );
+                            }).toList(),
+                            onChanged: (q) {
+                              if (q != null) {
+                                ref.read(previewQualityProvider.notifier).state = q;
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(width: 8),
+
                   // Aspect Ratio Dropdown
                   DropdownButtonHideUnderline(
                     child: DropdownButton<VideoAspectRatio>(
