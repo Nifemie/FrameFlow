@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 enum TrackType { backgroundUnderlay, mainVideo, overlayVideo, text, audio }
 
@@ -10,6 +10,7 @@ class TimelineTrackItem {
   final bool isVisible;
   final bool isMuted;
   final int orderIndex;
+  final int? colorValue;
 
   const TimelineTrackItem({
     required this.id,
@@ -18,8 +19,10 @@ class TimelineTrackItem {
     this.isVisible = true,
     this.isMuted = false,
     required this.orderIndex,
+    this.colorValue,
   });
 
+  Color? get customColor => colorValue != null ? Color(colorValue!) : null;
   bool get canMute => type == TrackType.audio || type == TrackType.mainVideo || type == TrackType.overlayVideo;
   bool get isUnderlay => type == TrackType.backgroundUnderlay;
   bool get isVideoOrBg => type == TrackType.mainVideo || type == TrackType.backgroundUnderlay || type == TrackType.overlayVideo;
@@ -31,6 +34,8 @@ class TimelineTrackItem {
     bool? isVisible,
     bool? isMuted,
     int? orderIndex,
+    int? colorValue,
+    bool clearColor = false,
   }) {
     return TimelineTrackItem(
       id: id ?? this.id,
@@ -39,6 +44,7 @@ class TimelineTrackItem {
       isVisible: isVisible ?? this.isVisible,
       isMuted: isMuted ?? this.isMuted,
       orderIndex: orderIndex ?? this.orderIndex,
+      colorValue: clearColor ? null : (colorValue ?? this.colorValue),
     );
   }
 
@@ -49,6 +55,7 @@ class TimelineTrackItem {
     'isVisible': isVisible,
     'isMuted': isMuted,
     'orderIndex': orderIndex,
+    if (colorValue != null) 'colorValue': colorValue,
   };
 
   factory TimelineTrackItem.fromJson(Map<String, dynamic> json) => TimelineTrackItem(
@@ -58,5 +65,6 @@ class TimelineTrackItem {
     isVisible: json['isVisible'] as bool? ?? true,
     isMuted: json['isMuted'] as bool? ?? false,
     orderIndex: json['orderIndex'] as int? ?? 0,
+    colorValue: json['colorValue'] as int?,
   );
 }

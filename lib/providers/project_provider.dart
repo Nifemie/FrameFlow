@@ -766,6 +766,16 @@ class ProjectNotifier extends StateNotifier<Project> {
     state = state.copyWith(tracks: updated);
   }
 
+  void setTrackColor(String trackId, int? colorValue) {
+    _undoRedo.recordSnapshot(state);
+    final updated = state.effectiveTracks
+        .map((t) => t.id == trackId
+            ? (colorValue == null ? t.copyWith(clearColor: true) : t.copyWith(colorValue: colorValue))
+            : t)
+        .toList();
+    state = state.copyWith(tracks: updated);
+  }
+
   void removeTrack(String trackId) {
     _undoRedo.recordSnapshot(state);
     final target = state.effectiveTracks.where((t) => t.id == trackId).firstOrNull;

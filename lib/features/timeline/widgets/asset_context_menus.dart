@@ -10,7 +10,6 @@ import '../../../models/timeline_track_item.dart';
 import '../../../providers/export_range_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
-import '../../../providers/theme_provider.dart';
 import '../../../services/playback_controller.dart';
 import '../../../services/video_playback_engine.dart';
 import '../../properties/widgets/video_range_dialog.dart';
@@ -489,13 +488,13 @@ class AssetContextMenus {
         ref.read(exportRangeProvider.notifier).clearRange();
         break;
       case 'timeline_color':
-        final currentTimelineColor = ref.read(themeProvider).timelineColor;
+        final initialColor = track.customColor ?? AppColors.surfaceLight;
         showDialog<void>(
           context: context,
           builder: (_) => AdvancedColorPickerDialog(
-            title: 'Timeline & Background Color',
-            initialColor: currentTimelineColor,
-            onColorChanged: (c) => ref.read(themeProvider.notifier).updateColor('timeline', c),
+            title: 'Timeline Color: ${track.name}',
+            initialColor: initialColor,
+            onColorChanged: (c) => notifier.setTrackColor(track.id, c.toARGB32()),
           ),
         );
         break;

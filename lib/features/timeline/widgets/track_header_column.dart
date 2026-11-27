@@ -98,11 +98,12 @@ class TrackHeaderColumn extends ConsumerWidget {
               itemBuilder: (context, idx) {
                 final tr = tracks[idx];
                 final isVideo = tr.isVideoOrBg;
-                final badgeColor = tr.type == TrackType.overlayVideo ? AppColors.accentOrange : (tr.type == TrackType.backgroundUnderlay ? Colors.purpleAccent : (tr.type == TrackType.text ? Colors.amber : (tr.type == TrackType.audio ? AppColors.waveform : AppColors.clipBlue)));
+                final defaultBadgeColor = tr.type == TrackType.overlayVideo ? AppColors.accentOrange : (tr.type == TrackType.backgroundUnderlay ? Colors.purpleAccent : (tr.type == TrackType.text ? Colors.amber : (tr.type == TrackType.audio ? AppColors.waveform : AppColors.clipBlue)));
+                final badgeColor = tr.customColor ?? defaultBadgeColor;
 
                 return _buildRow(
                   context: context, label: tr.name, height: isVideo ? 64 : (tr.type == TrackType.text ? 32 : 38),
-                  isVisible: tr.isVisible, isMuted: tr.isMuted, badgeColor: badgeColor,
+                  isVisible: tr.isVisible, isMuted: tr.isMuted, badgeColor: badgeColor, customColor: tr.customColor,
                   onRename: () => AssetContextMenus.showRenameTrackDialog(context, ref, tr),
                   onTap: () {
                     if (tr.type == TrackType.audio) {
@@ -157,13 +158,19 @@ class TrackHeaderColumn extends ConsumerWidget {
 
   Widget _buildRow({
     required BuildContext context, required String label, required double height, required bool isVisible,
-    required bool isMuted, required Color badgeColor, required VoidCallback onToggleVis, VoidCallback? onToggleMute,
+    required bool isMuted, required Color badgeColor, Color? customColor, required VoidCallback onToggleVis, VoidCallback? onToggleMute,
     VoidCallback? onAddMedia, VoidCallback? onAddBg, VoidCallback? onAutoArrange, VoidCallback? onTimestamp, VoidCallback? onDelete,
     VoidCallback? onTap, VoidCallback? onRename, void Function(TapUpDetails)? onSecondaryTapUp,
   }) {
     return Consumer(
       builder: (context, ref, _) {
         final theme = ref.watch(themeProvider);
+        final cardBg = customColor != null
+            ? (Color.lerp(AppColors.surfaceLight, customColor, 0.35) ?? AppColors.surfaceLight)
+            : AppColors.surfaceLight;
+        final cardBorder = customColor != null
+            ? customColor.withValues(alpha: 0.75)
+            : AppColors.surfaceBorder;
         return GestureDetector(
       onSecondaryTapUp: onSecondaryTapUp,
       child: Opacity(
@@ -173,7 +180,7 @@ class TrackHeaderColumn extends ConsumerWidget {
           borderRadius: BorderRadius.circular(4),
       child: Container(
         height: height, padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(4), border: Border.all(color: AppColors.surfaceBorder, width: 0.5)),
+        decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(4), border: Border.all(color: cardBorder, width: customColor != null ? 1.0 : 0.5)),
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center,
         children: [
