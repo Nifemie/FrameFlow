@@ -729,6 +729,29 @@ class ProjectNotifier extends StateNotifier<Project> {
   }
 
   void trimAudioClip(String clipId, int newDurationMs) => trimAudioClipEnd(clipId, newDurationMs);
+
+  /// Sets a specific source range [sourceStartMs..sourceEndMs] for an audio clip
+  /// (e.g., 5min to 8min out of a 10min audio -> 3min timeline clip).
+  void updateAudioSourceRange(String clipId, int sourceStartMs, int sourceEndMs) {
+    _undoRedo.recordSnapshot(state);
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    final res = AudioEditingService.updateSourceRange(
+      clips: clips,
+      clipId: clipId,
+      sourceStartMs: sourceStartMs,
+      sourceEndMs: sourceEndMs,
+    );
+    state = state.copyWith(
+      audioClips: res,
+      voiceOver: res.isNotEmpty
+          ? VoiceOver(
+              filePath: res.first.filePath,
+              fileName: res.first.fileName,
+              durationMs: res.fold<int>(0, (s, c) => s + c.durationMs),
+            )
+          : null,
+    );
+  }
   void removeVoiceOver() { _undoRedo.recordSnapshot(state); state = state.copyWith(clearVoiceOver: true, images: TimingEngine.calculateSequence(images: state.images, voiceOverDurationMs: null, snapFinalImageToAudio: false)); }
   void toggleTimingMode() { _undoRedo.recordSnapshot(state); state = state.copyWith(timingMode: state.timingMode == TimingMode.automatic ? TimingMode.manual : TimingMode.automatic); }
 

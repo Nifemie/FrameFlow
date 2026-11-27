@@ -8,6 +8,7 @@ class AudioClipItem {
   final int startTimelineMs;
   final int fileStartOffsetMs;
   final int durationMs;
+  final int? sourceDurationMs;
   final double volume; // 0.0 to 1.5 (1.0 = 100%)
   final int orderIndex;
   final bool isMarked;
@@ -19,6 +20,7 @@ class AudioClipItem {
     required this.startTimelineMs,
     this.fileStartOffsetMs = 0,
     required this.durationMs,
+    this.sourceDurationMs,
     this.volume = 1.0,
     required this.orderIndex,
     this.isMarked = false,
@@ -33,6 +35,7 @@ class AudioClipItem {
     int? startTimelineMs,
     int? fileStartOffsetMs,
     int? durationMs,
+    int? sourceDurationMs,
     double? volume,
     int? orderIndex,
     bool? isMarked,
@@ -44,6 +47,7 @@ class AudioClipItem {
       startTimelineMs: startTimelineMs ?? this.startTimelineMs,
       fileStartOffsetMs: fileStartOffsetMs ?? this.fileStartOffsetMs,
       durationMs: durationMs ?? this.durationMs,
+      sourceDurationMs: sourceDurationMs ?? this.sourceDurationMs,
       volume: volume ?? this.volume,
       orderIndex: orderIndex ?? this.orderIndex,
       isMarked: isMarked ?? this.isMarked,

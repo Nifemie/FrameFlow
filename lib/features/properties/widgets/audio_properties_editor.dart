@@ -8,6 +8,7 @@ import '../../../models/audio_clip_item.dart';
 import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import 'audio_range_dialog.dart';
 import '../../../services/playback_controller.dart';
 import '../../../services/video_playback_engine.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
@@ -336,6 +337,54 @@ class AudioPropertiesEditor extends ConsumerWidget {
               const SizedBox(width: 4),
               _buildVolPreset(ref, '150%', 1.5),
             ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: AppColors.surfaceBorder),
+          const SizedBox(height: 14),
+
+          // Audio Source Range (In - Out)
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.surfaceBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Audio Source Range', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.waveform)),
+                    if (clip.sourceDurationMs != null && clip.sourceDurationMs! > 0)
+                      Text(
+                        'Total: ${TimeParser.formatStandard(clip.sourceDurationMs!)}',
+                        style: const TextStyle(fontSize: 9.5, color: AppColors.textMuted),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${TimeParser.formatStandard(clip.fileStartOffsetMs)} → ${TimeParser.formatStandard(clip.fileStartOffsetMs + clip.durationMs)}',
+                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  height: 28,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      side: const BorderSide(color: AppColors.accentOrange),
+                    ),
+                    icon: const Icon(Icons.graphic_eq, size: 13, color: AppColors.accentOrange),
+                    label: const Text('Cut / Set Range (In - Out)', style: TextStyle(fontSize: 10.5, color: Colors.white, fontWeight: FontWeight.bold)),
+                    onPressed: () => showDialog(context: context, builder: (_) => AudioRangeDialog(clip: clip)),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
           const Divider(height: 1, color: AppColors.surfaceBorder),

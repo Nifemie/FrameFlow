@@ -19,6 +19,7 @@ class AudioEditingService {
       fileName: fileName,
       startTimelineMs: startMs,
       durationMs: durationMs,
+      sourceDurationMs: durationMs,
       volume: 1.0,
       orderIndex: existingClips.length,
     );
@@ -47,6 +48,7 @@ class AudioEditingService {
       startTimelineMs: playheadMs,
       fileStartOffsetMs: target.fileStartOffsetMs + splitOffset,
       durationMs: target.durationMs - splitOffset,
+      sourceDurationMs: target.sourceDurationMs,
       volume: target.volume,
       orderIndex: target.orderIndex + 1,
     );
@@ -145,6 +147,27 @@ class AudioEditingService {
       updated[i] = updated[i].copyWith(orderIndex: i);
     }
     return updated;
+  }
+
+  /// Sets an exact [sourceStartMs..sourceEndMs] range within the underlying audio file.
+  static List<AudioClipItem> updateSourceRange({
+    required List<AudioClipItem> clips,
+    required String clipId,
+    required int sourceStartMs,
+    required int sourceEndMs,
+  }) {
+    return clips.map((c) {
+      if (c.id != clipId) return c;
+      final maxDur = c.sourceDurationMs;
+      final upperBound = (maxDur != null && maxDur > 0) ? maxDur : sourceEndMs;
+      final clampedStart = sourceStartMs.clamp(0, (upperBound - 200).clamp(0, upperBound));
+      final clampedEnd = sourceEndMs.clamp(clampedStart + 200, upperBound);
+      return c.copyWith(
+        fileStartOffsetMs: clampedStart,
+        durationMs: clampedEnd - clampedStart,
+        sourceDurationMs: c.sourceDurationMs ?? clampedEnd,
+      );
+    }).toList();
   }
 
   static AudioClipItem? findClipAt(List<AudioClipItem> clips, int timelineMs) {

@@ -12,6 +12,7 @@ import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../services/playback_controller.dart';
 import '../../../services/video_playback_engine.dart';
+import '../../properties/widgets/audio_range_dialog.dart';
 import '../../properties/widgets/video_range_dialog.dart';
 import '../../shell/widgets/advanced_color_picker_dialog.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
@@ -207,6 +208,10 @@ class AssetContextMenus {
           child: Row(children: [Icon(Icons.tune, size: 15, color: AppColors.waveform), SizedBox(width: 8), Text('Show Audio Properties', style: TextStyle(fontSize: 12, color: Colors.white))]),
         ),
         const PopupMenuItem(
+          value: 'audio_range',
+          child: Row(children: [Icon(Icons.graphic_eq, size: 15, color: AppColors.accentOrange), SizedBox(width: 8), Text('Set Audio Range (In / Out)...', style: TextStyle(fontSize: 12, color: Colors.white))]),
+        ),
+        const PopupMenuItem(
           value: 'volume',
           child: Row(children: [Icon(Icons.volume_up, size: 15, color: AppColors.waveform), SizedBox(width: 8), Text('Adjust Volume...', style: TextStyle(fontSize: 12, color: Colors.white))]),
         ),
@@ -232,6 +237,9 @@ class AssetContextMenus {
 
     if (!context.mounted || selected == null) return;
     switch (selected) {
+      case 'audio_range':
+        showDialog(context: context, builder: (_) => AudioRangeDialog(clip: clip));
+        break;
       case 'volume':
         showDialog(context: context, builder: (_) => AudioVolumeDialog(clip: clip));
         break;

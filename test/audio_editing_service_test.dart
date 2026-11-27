@@ -120,5 +120,31 @@ void main() {
       expect(moved[1].orderIndex, equals(1));
       expect(moved[1].startTimelineMs, equals(25000));
     });
+
+    test('Updates audio source range (e.g., 5:00 to 8:00 of a 10:00 audio)', () {
+      final clips = [
+        const AudioClipItem(
+          id: '1',
+          filePath: 'long.mp3',
+          fileName: 'Long Audio',
+          startTimelineMs: 0,
+          durationMs: 600000,
+          sourceDurationMs: 600000,
+          orderIndex: 0,
+        ),
+      ];
+
+      final ranged = AudioEditingService.updateSourceRange(
+        clips: clips,
+        clipId: '1',
+        sourceStartMs: 300000, // 05:00
+        sourceEndMs: 480000,   // 08:00
+      );
+
+      expect(ranged.first.fileStartOffsetMs, equals(300000));
+      expect(ranged.first.durationMs, equals(180000));
+      expect(ranged.first.sourceDurationMs, equals(600000));
+      expect(ranged.first.startTimelineMs, equals(0));
+    });
   });
 }
