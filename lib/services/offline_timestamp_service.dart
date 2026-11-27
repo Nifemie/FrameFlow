@@ -185,6 +185,7 @@ class OfflineTimestampService {
               : (modelName.contains('base') ? 'base' : 'tiny'));
 
       final threads = Platform.numberOfProcessors.clamp(2, 8);
+      final useDtw = !highAccuracy;
       final whisperFuture = Process.run(whisperCli, [
         '-m', modelPath,
         '-f', wavPath,
@@ -193,7 +194,7 @@ class OfflineTimestampService {
         '-of', outBase,
         '-ml', '1',
         '-sow',
-        '-dtw', dtwModel,
+        if (useDtw) ...['-dtw', dtwModel],
         if (prompt.isNotEmpty) ...['--prompt', prompt],
       ]);
       final silenceFuture = _detectSilences(ffmpeg, wavPath);

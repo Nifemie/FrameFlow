@@ -440,7 +440,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
             children: [
               Expanded(
                 child: ChoiceChip(
-                  label: const Text('Fast (tiny.en)', style: TextStyle(fontSize: 11)),
+                  label: const Text('Fast', style: TextStyle(fontSize: 11)),
                   selected: !_highAccuracy,
                   selectedColor: AppColors.accentOrange.withValues(alpha: 0.25),
                   onSelected: (_) => setState(() => _highAccuracy = false),
@@ -449,7 +449,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
               const SizedBox(width: 8),
               Expanded(
                 child: ChoiceChip(
-                  label: const Text('High Accuracy (base.en)', style: TextStyle(fontSize: 11)),
+                  label: const Text('High Accuracy', style: TextStyle(fontSize: 11)),
                   selected: _highAccuracy,
                   selectedColor: AppColors.accentOrange.withValues(alpha: 0.25),
                   onSelected: (_) => setState(() => _highAccuracy = true),
