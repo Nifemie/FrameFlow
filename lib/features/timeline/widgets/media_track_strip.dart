@@ -108,6 +108,7 @@ class MediaTrackStrip extends ConsumerWidget {
       ref: ref,
       globalPosition: details.globalPosition,
       track: track,
+      clickMs: clickMs,
       emptyStartMs: emptyStart,
       emptyEndMs: emptyEnd,
       onFillEmptyWithMedia: () async {

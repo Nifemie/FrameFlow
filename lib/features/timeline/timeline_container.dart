@@ -97,11 +97,13 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
     final rangeState = ref.read(exportRangeProvider);
     final rangeNotifier = ref.read(exportRangeProvider.notifier);
     final timeLabel = TimeParser.formatStandard(clickMs);
+    final hitSavedIdx = rangeState.savedRanges.indexWhere((r) => clickMs >= r.startMs && clickMs <= r.endMs);
+    final hitActive = rangeState.hasRange && clickMs >= rangeState.inMs! && clickMs <= rangeState.outMs!;
 
     final selected = await showMenu<String>(
       context: context,
       color: AppColors.surface,
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 360),
+      constraints: const BoxConstraints(minWidth: 230, maxWidth: 380),
       position: RelativeRect.fromLTRB(
         details.globalPosition.dx,
         details.globalPosition.dy,
@@ -109,6 +111,14 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
         details.globalPosition.dy,
       ),
       items: [
+        PopupMenuItem(
+          value: 'add_new_range_here',
+          child: Row(children: [
+            const Icon(Icons.add_box_outlined, size: 15, color: Colors.tealAccent),
+            const SizedBox(width: 8),
+            Flexible(child: Text('Add New Range Here ($timeLabel)', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white))),
+          ]),
+        ),
         PopupMenuItem(
           value: 'set_in',
           child: Row(children: [
@@ -134,13 +144,28 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
               Text('Save Range & Mark Next', style: TextStyle(fontSize: 12, color: Colors.white)),
             ]),
           ),
-        if (rangeState.inMs != null || rangeState.outMs != null)
+        if (hitSavedIdx >= 0)
+          PopupMenuItem(
+            value: 'delete_hit_saved',
+            child: Row(children: [
+              const Icon(Icons.delete_outline, size: 15, color: AppColors.errorRed),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Delete Range #${hitSavedIdx + 1}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppColors.errorRed),
+                ),
+              ),
+            ]),
+          ),
+        if (hitActive || (hitSavedIdx < 0 && (rangeState.inMs != null || rangeState.outMs != null)))
           const PopupMenuItem(
             value: 'clear_range',
             child: Row(children: [
               Icon(Icons.clear_all, size: 15, color: Colors.white70),
               SizedBox(width: 8),
-              Text('Clear Active Range', style: TextStyle(fontSize: 12, color: Colors.white)),
+              Text('Delete Active Range', style: TextStyle(fontSize: 12, color: Colors.white)),
             ]),
           ),
         if (rangeState.savedRanges.isNotEmpty)
@@ -149,7 +174,7 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
             child: Row(children: [
               Icon(Icons.layers_clear, size: 15, color: AppColors.errorRed),
               SizedBox(width: 8),
-              Text('Clear All Saved Ranges', style: TextStyle(fontSize: 12, color: AppColors.errorRed)),
+              Text('Delete All Ranges', style: TextStyle(fontSize: 12, color: AppColors.errorRed)),
             ]),
           ),
         const PopupMenuDivider(),
@@ -174,6 +199,12 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
 
     if (!mounted || selected == null) return;
     switch (selected) {
+      case 'add_new_range_here':
+        final maxMs = totalDurationMs > 500 ? totalDurationMs : 30000;
+        final start = clickMs.clamp(0, maxMs - 500);
+        final end = (start + 5000).clamp(start + 500, maxMs);
+        rangeNotifier.addRange(ExportRange(startMs: start, endMs: end));
+        break;
       case 'set_in':
         rangeNotifier.setInPoint(clickMs, totalDurationMs: totalDurationMs);
         break;
@@ -183,10 +214,14 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
       case 'queue_range':
         rangeNotifier.commitActiveRange();
         break;
+      case 'delete_hit_saved':
+        if (hitSavedIdx >= 0) rangeNotifier.removeSavedRange(hitSavedIdx);
+        break;
       case 'clear_range':
         rangeNotifier.clearRange();
         break;
       case 'clear_all_saved':
+        rangeNotifier.clearRange();
         rangeNotifier.clearSavedRanges();
         break;
       case 'add_marker':
@@ -469,25 +504,33 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                             ),
                           ),
                         ),
-                        if (rangeState.hasRange) ...[
-                          const SizedBox(width: 4),
-                          InkWell(
-                            onTap: rangeNotifier.commitActiveRange,
-                            borderRadius: BorderRadius.circular(4),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                              decoration: BoxDecoration(
-                                color: Colors.tealAccent.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.tealAccent),
-                              ),
-                              child: const Text(
-                                '+ Range',
-                                style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.tealAccent),
-                              ),
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: () {
+                            if (rangeState.hasRange) {
+                              rangeNotifier.commitActiveRange();
+                            } else {
+                              final playhead = ref.read(playheadPositionProvider);
+                              final maxMs = totalDurationMs > 500 ? totalDurationMs : 30000;
+                              final start = playhead.clamp(0, maxMs - 500);
+                              final end = (start + 5000).clamp(start + 500, maxMs);
+                              rangeNotifier.addRange(ExportRange(startMs: start, endMs: end));
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: Colors.tealAccent.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.tealAccent),
+                            ),
+                            child: const Text(
+                              '+ Range',
+                              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.tealAccent),
                             ),
                           ),
-                        ],
+                        ),
                         if (rangeState.savedRanges.isNotEmpty) ...[
                           const SizedBox(width: 4),
                           Container(

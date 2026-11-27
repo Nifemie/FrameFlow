@@ -322,6 +322,7 @@ class AssetContextMenus {
     required WidgetRef ref,
     required Offset globalPosition,
     required TimelineTrackItem track,
+    int? clickMs,
     int? emptyStartMs,
     int? emptyEndMs,
     VoidCallback? onFillEmptyWithMedia,
@@ -331,6 +332,9 @@ class AssetContextMenus {
     VoidCallback? onAddBg,
   }) async {
     final notifier = ref.read(projectProvider.notifier);
+    final rangeState = ref.read(exportRangeProvider);
+    final int targetMs = clickMs ?? ref.read(playheadPositionProvider) ?? 0;
+    final hitSavedIdx = rangeState.savedRanges.indexWhere((r) => targetMs >= r.startMs && targetMs <= r.endMs);
     final isMedia = track.isVideoOrBg;
     final hasEmptyRange = isMedia && emptyStartMs != null && emptyEndMs != null && emptyEndMs > emptyStartMs;
     final emptyLabel = hasEmptyRange
@@ -399,10 +403,20 @@ class AssetContextMenus {
           value: 'set_export_out',
           child: Row(children: [Icon(Icons.last_page, size: 15, color: AppColors.exportGreen), SizedBox(width: 8), Text('Set Export Out Point (O)', style: TextStyle(fontSize: 12, color: Colors.white))]),
         ),
-        if (ref.read(exportRangeProvider).hasRange)
+        if (hitSavedIdx >= 0)
+          PopupMenuItem(
+            value: 'delete_saved_range',
+            child: Row(children: [const Icon(Icons.delete_outline, size: 15, color: AppColors.errorRed), const SizedBox(width: 8), Text('Delete Range #${hitSavedIdx + 1}', style: const TextStyle(fontSize: 12, color: AppColors.errorRed))]),
+          ),
+        if (rangeState.inMs != null || rangeState.outMs != null)
           const PopupMenuItem(
             value: 'clear_export_range',
-            child: Row(children: [Icon(Icons.clear_all, size: 15, color: Colors.white70), SizedBox(width: 8), Text('Clear Export Range', style: TextStyle(fontSize: 12, color: Colors.white))]),
+            child: Row(children: [Icon(Icons.clear_all, size: 15, color: Colors.white70), SizedBox(width: 8), Text('Delete Active Range', style: TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        if (rangeState.savedRanges.isNotEmpty)
+          const PopupMenuItem(
+            value: 'clear_all_ranges',
+            child: Row(children: [Icon(Icons.layers_clear, size: 15, color: AppColors.errorRed), SizedBox(width: 8), Text('Delete All Ranges', style: TextStyle(fontSize: 12, color: AppColors.errorRed))]),
           ),
         const PopupMenuDivider(),
         const PopupMenuItem(
@@ -484,8 +498,17 @@ class AssetContextMenus {
         final totalMs = ref.read(projectProvider).totalDurationMs;
         ref.read(exportRangeProvider.notifier).setOutPoint(playheadMs, totalDurationMs: totalMs);
         break;
+      case 'delete_saved_range':
+        if (hitSavedIdx >= 0) {
+          ref.read(exportRangeProvider.notifier).removeSavedRange(hitSavedIdx);
+        }
+        break;
       case 'clear_export_range':
         ref.read(exportRangeProvider.notifier).clearRange();
+        break;
+      case 'clear_all_ranges':
+        ref.read(exportRangeProvider.notifier).clearRange();
+        ref.read(exportRangeProvider.notifier).clearSavedRanges();
         break;
       case 'timeline_color':
         final initialColor = track.customColor ?? AppColors.surfaceLight;
