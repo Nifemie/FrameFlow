@@ -101,6 +101,25 @@ class ExportRangeNotifier extends StateNotifier<ExportRangeState> {
     state = state.copyWith(savedRanges: [...state.savedRanges, range]);
   }
 
+  void updateSavedRange(int index, ExportRange range) {
+    if (index < 0 || index >= state.savedRanges.length) return;
+    if (!range.isValid) return;
+    final next = List<ExportRange>.from(state.savedRanges);
+    next[index] = range;
+    state = state.copyWith(savedRanges: next);
+  }
+
+  /// Commits the current active [inMs, outMs] range to [savedRanges] and clears
+  /// the active markers so the user can immediately mark another range.
+  void commitActiveRange() {
+    final active = state.activeRange;
+    if (active == null) return;
+    final next = state.savedRanges.contains(active)
+        ? state.savedRanges
+        : [...state.savedRanges, active];
+    state = state.copyWith(savedRanges: next, clearIn: true, clearOut: true);
+  }
+
   void removeSavedRange(int index) {
     if (index < 0 || index >= state.savedRanges.length) return;
     final next = List<ExportRange>.from(state.savedRanges)..removeAt(index);

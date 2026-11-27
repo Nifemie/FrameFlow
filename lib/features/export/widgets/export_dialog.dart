@@ -13,6 +13,20 @@ import 'export_progress_card.dart';
 
 enum ExportScope { entire, selectedRange, multipleRanges }
 
+class _EditableRangeEntry {
+  final TextEditingController startCtrl;
+  final TextEditingController endCtrl;
+
+  _EditableRangeEntry(int startMs, int endMs)
+      : startCtrl = TextEditingController(text: TimeParser.formatStandard(startMs)),
+        endCtrl = TextEditingController(text: TimeParser.formatStandard(endMs));
+
+  void dispose() {
+    startCtrl.dispose();
+    endCtrl.dispose();
+  }
+}
+
 class ExportDialog extends ConsumerStatefulWidget {
   const ExportDialog({super.key});
 
@@ -30,6 +44,7 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
   late ExportScope _scope;
   late TextEditingController _startCtrl;
   late TextEditingController _endCtrl;
+  final List<_EditableRangeEntry> _multiEntries = [];
   String? _rangeError;
 
   final FFmpegService _ffmpegService = FFmpegService();
@@ -47,40 +62,89 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
     _resolution = project.resolution;
     _fps = project.fps;
 
-    _scope = rangeState.hasRange ? ExportScope.selectedRange : ExportScope.entire;
+    if (rangeState.savedRanges.isNotEmpty) {
+      _scope = ExportScope.multipleRanges;
+    } else if (rangeState.hasRange) {
+      _scope = ExportScope.selectedRange;
+    } else {
+      _scope = ExportScope.entire;
+    }
+
     final initialStart = rangeState.inMs ?? 0;
     final initialEnd = rangeState.outMs ?? (project.totalDurationMs > 0 ? project.totalDurationMs : 5000);
     _startCtrl = TextEditingController(text: TimeParser.formatStandard(initialStart));
     _endCtrl = TextEditingController(text: TimeParser.formatStandard(initialEnd));
+
+    for (final r in rangeState.savedRanges) {
+      _multiEntries.add(_EditableRangeEntry(r.startMs, r.endMs));
+    }
+    if (_multiEntries.isEmpty && rangeState.hasRange) {
+      _multiEntries.add(_EditableRangeEntry(rangeState.inMs!, rangeState.outMs!));
+    }
   }
 
   @override
   void dispose() {
     _startCtrl.dispose();
     _endCtrl.dispose();
+    for (final e in _multiEntries) {
+      e.dispose();
+    }
     super.dispose();
   }
 
-  ({int startMs, int endMs})? _parseValidatedRange(int totalDurationMs) {
-    final s = TimeParser.parseToMs(_startCtrl.text.trim());
-    var e = TimeParser.parseToMs(_endCtrl.text.trim());
+  ({int startMs, int endMs})? _parsePair(String startText, String endText, int totalDurationMs, {String prefix = ''}) {
+    final s = TimeParser.parseToMs(startText.trim());
+    var e = TimeParser.parseToMs(endText.trim());
     if (s == null || e == null) {
-      setState(() => _rangeError = 'Enter valid timecodes (e.g. 00:05.00)');
+      setState(() => _rangeError = '${prefix}Enter valid timecodes (e.g. 00:05.00)');
       return null;
     }
     if (e > totalDurationMs && e - totalDurationMs <= 20) {
       e = totalDurationMs;
     }
     if (s < 0 || e > totalDurationMs) {
-      setState(() => _rangeError = 'Range must stay within 00:00.00 – ${TimeParser.formatStandard(totalDurationMs)}');
+      setState(() => _rangeError = '${prefix}Range must stay within 00:00.00 – ${TimeParser.formatStandard(totalDurationMs)}');
       return null;
     }
     if (e <= s) {
-      setState(() => _rangeError = 'End time must be greater than start time');
+      setState(() => _rangeError = '${prefix}End time must be greater than start time');
       return null;
     }
-    setState(() => _rangeError = null);
     return (startMs: s, endMs: e);
+  }
+
+  void _syncMultiEntriesToProvider(int totalDurationMs) {
+    final notifier = ref.read(exportRangeProvider.notifier);
+    notifier.clearSavedRanges();
+    for (final entry in _multiEntries) {
+      final s = TimeParser.parseToMs(entry.startCtrl.text.trim());
+      var e = TimeParser.parseToMs(entry.endCtrl.text.trim());
+      if (s != null && e != null) {
+        if (e > totalDurationMs && e - totalDurationMs <= 20) e = totalDurationMs;
+        if (s >= 0 && e > s && e <= totalDurationMs) {
+          notifier.addRange(ExportRange(startMs: s, endMs: e));
+        }
+      }
+    }
+  }
+
+  void _addEditableMultiRange(int totalDurationMs) {
+    final defaultEnd = totalDurationMs > 0 ? totalDurationMs.clamp(0, 5000) : 5000;
+    setState(() {
+      _multiEntries.add(_EditableRangeEntry(0, defaultEnd));
+      _rangeError = null;
+    });
+    _syncMultiEntriesToProvider(totalDurationMs);
+  }
+
+  void _removeEditableMultiRange(int idx, int totalDurationMs) {
+    setState(() {
+      _multiEntries[idx].dispose();
+      _multiEntries.removeAt(idx);
+      _rangeError = null;
+    });
+    _syncMultiEntriesToProvider(totalDurationMs);
   }
 
   Future<void> _startExport() async {
@@ -89,17 +153,28 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
 
     List<ExportRange> rangesToExport = [];
     if (_scope == ExportScope.selectedRange) {
-      final parsed = _parseValidatedRange(project.totalDurationMs);
+      final parsed = _parsePair(_startCtrl.text, _endCtrl.text, project.totalDurationMs);
       if (parsed == null) return;
+      setState(() => _rangeError = null);
       ref.read(exportRangeProvider.notifier).setRange(parsed.startMs, parsed.endMs);
       rangesToExport = [ExportRange(startMs: parsed.startMs, endMs: parsed.endMs)];
     } else if (_scope == ExportScope.multipleRanges) {
-      final saved = ref.read(exportRangeProvider).savedRanges;
-      if (saved.isEmpty) {
-        setState(() => _rangeError = 'Add at least one range to export.');
+      if (_multiEntries.isEmpty) {
+        setState(() => _rangeError = 'Click "+ Add Range" to add at least one range.');
         return;
       }
-      rangesToExport = saved;
+      for (int i = 0; i < _multiEntries.length; i++) {
+        final parsed = _parsePair(
+          _multiEntries[i].startCtrl.text,
+          _multiEntries[i].endCtrl.text,
+          project.totalDurationMs,
+          prefix: 'Range #${i + 1}: ',
+        );
+        if (parsed == null) return;
+        rangesToExport.add(ExportRange(startMs: parsed.startMs, endMs: parsed.endMs));
+      }
+      setState(() => _rangeError = null);
+      _syncMultiEntriesToProvider(project.totalDurationMs);
     }
 
     final ext = _format.extension.replaceAll('.', '');
@@ -192,8 +267,6 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(projectProvider);
-    final rangeState = ref.watch(exportRangeProvider);
-    final rangeNotifier = ref.read(exportRangeProvider.notifier);
 
     final parsedStart = TimeParser.parseToMs(_startCtrl.text.trim()) ?? 0;
     final parsedEnd = TimeParser.parseToMs(_endCtrl.text.trim()) ?? 0;
@@ -203,7 +276,7 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
       backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Container(
-        width: 530,
+        width: 540,
         padding: const EdgeInsets.all(18),
         child: _isExporting
             ? ExportProgressCard(
@@ -238,11 +311,11 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                         const SizedBox(width: 6),
                         _scopeChip(ExportScope.selectedRange, 'Selected Range'),
                         const SizedBox(width: 6),
-                        _scopeChip(ExportScope.multipleRanges, 'Multiple Ranges (${rangeState.savedRanges.length})'),
+                        _scopeChip(ExportScope.multipleRanges, 'Multiple Ranges (${_multiEntries.length})'),
                       ],
                     ),
 
-                    if (_scope != ExportScope.entire) ...[
+                    if (_scope == ExportScope.selectedRange) ...[
                       const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.all(10),
@@ -286,74 +359,124 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                                 ),
                               ],
                             ),
-                            if (_scope == ExportScope.multipleRanges) ...[
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Queued Ranges (${rangeState.savedRanges.length})',
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
-                                  ),
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      final parsed = _parseValidatedRange(project.totalDurationMs);
-                                      if (parsed != null) {
-                                        final newRange = ExportRange(startMs: parsed.startMs, endMs: parsed.endMs);
-                                        if (rangeState.savedRanges.contains(newRange)) {
-                                          setState(() => _rangeError = 'Range already in queue — adjust In/Out above to add another.');
-                                          return;
-                                        }
-                                        rangeNotifier.addRange(newRange);
-                                        // Advance In/Out inputs to suggest the next segment
-                                        final nextStart = parsed.endMs < project.totalDurationMs ? parsed.endMs : 0;
-                                        final nextEnd = (nextStart + 5000).clamp(nextStart, project.totalDurationMs);
-                                        if (nextEnd > nextStart) {
-                                          _startCtrl.text = TimeParser.formatStandard(nextStart);
-                                          _endCtrl.text = TimeParser.formatStandard(nextEnd);
-                                        }
-                                        setState(() => _rangeError = null);
-                                      }
-                                    },
-                                    icon: const Icon(Icons.add, size: 13),
-                                    label: const Text('Add Range', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.exportGreen.withValues(alpha: 0.2),
-                                      foregroundColor: AppColors.exportGreen,
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            if (_rangeError != null) ...[
                               const SizedBox(height: 6),
-                              if (rangeState.savedRanges.isEmpty)
-                                const Text('No ranges queued yet. Set In/Out above and click "+ Add Range".', style: TextStyle(fontSize: 10, color: AppColors.textMuted))
-                              else ...[
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: [
-                                    for (int i = 0; i < rangeState.savedRanges.length; i++)
-                                      Chip(
-                                        backgroundColor: AppColors.surfaceLight,
-                                        label: Text(
-                                          '#${i + 1}  ${TimeParser.formatStandard(rangeState.savedRanges[i].startMs)} → ${TimeParser.formatStandard(rangeState.savedRanges[i].endMs)} (${(rangeState.savedRanges[i].durationMs / 1000).toStringAsFixed(1)}s)',
-                                          style: const TextStyle(fontFamily: 'Consolas', fontSize: 10, color: Colors.white),
-                                        ),
-                                        deleteIcon: const Icon(Icons.close, size: 13, color: Colors.white70),
-                                        onDeleted: () => rangeNotifier.removeSavedRange(i),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
+                              Text(_rangeError!, style: const TextStyle(fontSize: 11, color: AppColors.errorRed)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    if (_scope == ExportScope.multipleRanges) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.exportGreen.withValues(alpha: 0.45)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
                                 Text(
-                                  '${rangeState.savedRanges.length} range(s) will be exported sequentially (_range1, _range2, ...).',
-                                  style: const TextStyle(fontSize: 10, color: AppColors.exportGreen),
+                                  'Custom Export Ranges (${_multiEntries.length})',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () => _addEditableMultiRange(project.totalDurationMs),
+                                  icon: const Icon(Icons.add, size: 13),
+                                  label: const Text('Add Range', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.exportGreen.withValues(alpha: 0.2),
+                                    foregroundColor: AppColors.exportGreen,
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
                                 ),
                               ],
-                            ],
+                            ),
+                            const SizedBox(height: 8),
+                            if (_multiEntries.isEmpty)
+                              const Text('No ranges yet. Click "+ Add Range" to create an editable range.', style: TextStyle(fontSize: 10.5, color: AppColors.textMuted))
+                            else
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 190),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: [
+                                      for (int i = 0; i < _multiEntries.length; i++)
+                                        Padding(
+                                          padding: const EdgeInsets.only(bottom: 8),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.surfaceLight,
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text('#${i + 1}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.exportGreen)),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: TextField(
+                                                  controller: _multiEntries[i].startCtrl,
+                                                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 12, color: Colors.white),
+                                                  decoration: const InputDecoration(labelText: 'In (Start)', isDense: true),
+                                                  onChanged: (_) {
+                                                    setState(() {});
+                                                    _syncMultiEntriesToProvider(project.totalDurationMs);
+                                                  },
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: TextField(
+                                                  controller: _multiEntries[i].endCtrl,
+                                                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 12, color: Colors.white),
+                                                  decoration: const InputDecoration(labelText: 'Out (End)', isDense: true),
+                                                  onChanged: (_) {
+                                                    setState(() {});
+                                                    _syncMultiEntriesToProvider(project.totalDurationMs);
+                                                  },
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Builder(builder: (_) {
+                                                final s = TimeParser.parseToMs(_multiEntries[i].startCtrl.text.trim()) ?? 0;
+                                                final e = TimeParser.parseToMs(_multiEntries[i].endCtrl.text.trim()) ?? 0;
+                                                final d = (e - s).clamp(0, project.totalDurationMs);
+                                                return Text(
+                                                  TimeParser.formatStandard(d),
+                                                  style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.exportGreen),
+                                                );
+                                              }),
+                                              const SizedBox(width: 4),
+                                              IconButton(
+                                                icon: const Icon(Icons.close, size: 15, color: Colors.white70),
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                                                tooltip: 'Remove Range',
+                                                onPressed: () => _removeEditableMultiRange(i, project.totalDurationMs),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            if (_multiEntries.isNotEmpty)
+                              Text(
+                                '${_multiEntries.length} range(s) will export one after another (_range1, _range2, ...).',
+                                style: const TextStyle(fontSize: 10, color: AppColors.exportGreen),
+                              ),
                             if (_rangeError != null) ...[
                               const SizedBox(height: 6),
                               Text(_rangeError!, style: const TextStyle(fontSize: 11, color: AppColors.errorRed)),
@@ -420,7 +543,7 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                     Text(
                       _scope == ExportScope.entire
                           ? 'Aspect Ratio: ${project.aspectRatio.label} • Duration: ${TimeParser.formatStandard(project.totalDurationMs)} (${project.images.length} clips)'
-                          : 'Aspect Ratio: ${project.aspectRatio.label} • Selected Range Export',
+                          : 'Aspect Ratio: ${project.aspectRatio.label} • Selective Range Export',
                       style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
                     ),
                     const SizedBox(height: 14),
@@ -451,6 +574,11 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
         onTap: () => setState(() {
           _scope = scope;
           _rangeError = null;
+          if (scope == ExportScope.multipleRanges && _multiEntries.isEmpty) {
+            final project = ref.read(projectProvider);
+            final defaultEnd = project.totalDurationMs > 0 ? project.totalDurationMs.clamp(0, 5000) : 5000;
+            _multiEntries.add(_EditableRangeEntry(0, defaultEnd));
+          }
         }),
         borderRadius: BorderRadius.circular(6),
         child: Container(

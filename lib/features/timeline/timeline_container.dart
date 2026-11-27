@@ -131,7 +131,7 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
             child: Row(children: [
               Icon(Icons.playlist_add, size: 15, color: AppColors.exportGreen),
               SizedBox(width: 8),
-              Text('Add Range to Export Queue', style: TextStyle(fontSize: 12, color: Colors.white)),
+              Text('Save Range & Mark Next', style: TextStyle(fontSize: 12, color: Colors.white)),
             ]),
           ),
         if (rangeState.inMs != null || rangeState.outMs != null)
@@ -140,7 +140,16 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
             child: Row(children: [
               Icon(Icons.clear_all, size: 15, color: Colors.white70),
               SizedBox(width: 8),
-              Text('Clear Export Range', style: TextStyle(fontSize: 12, color: Colors.white)),
+              Text('Clear Active Range', style: TextStyle(fontSize: 12, color: Colors.white)),
+            ]),
+          ),
+        if (rangeState.savedRanges.isNotEmpty)
+          const PopupMenuItem(
+            value: 'clear_all_saved',
+            child: Row(children: [
+              Icon(Icons.layers_clear, size: 15, color: AppColors.errorRed),
+              SizedBox(width: 8),
+              Text('Clear All Saved Ranges', style: TextStyle(fontSize: 12, color: AppColors.errorRed)),
             ]),
           ),
         const PopupMenuDivider(),
@@ -172,12 +181,13 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
         rangeNotifier.setOutPoint(clickMs, totalDurationMs: totalDurationMs);
         break;
       case 'queue_range':
-        if (rangeState.activeRange != null) {
-          rangeNotifier.addRange(rangeState.activeRange!);
-        }
+        rangeNotifier.commitActiveRange();
         break;
       case 'clear_range':
         rangeNotifier.clearRange();
+        break;
+      case 'clear_all_saved':
+        rangeNotifier.clearSavedRanges();
         break;
       case 'add_marker':
         final count = ref.read(projectProvider).markers.length + 1;
@@ -459,6 +469,40 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                             ),
                           ),
                         ),
+                        if (rangeState.hasRange) ...[
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: rangeNotifier.commitActiveRange,
+                            borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                color: Colors.tealAccent.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.tealAccent),
+                              ),
+                              child: const Text(
+                                '+ Range',
+                                style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.tealAccent),
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (rangeState.savedRanges.isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: Colors.tealAccent.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.6)),
+                            ),
+                            child: Text(
+                              '${rangeState.savedRanges.length} Range${rangeState.savedRanges.length == 1 ? '' : 's'}',
+                              style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.tealAccent),
+                            ),
+                          ),
+                        ],
                         if (rangeState.inMs != null || rangeState.outMs != null) ...[
                           const SizedBox(width: 4),
                           InkWell(
@@ -696,22 +740,130 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                         ),
                                       ),
 
-                                    // Export In / Out Range Highlight & Draggable Handles
+                                    // Export In / Out Range Highlights & Draggable Handles (Saved + Active)
                                     Consumer(
                                       builder: (context, ref, _) {
                                         final rangeState = ref.watch(exportRangeProvider);
+                                        final rangeNotifier = ref.read(exportRangeProvider.notifier);
                                         final inMs = rangeState.inMs;
                                         final outMs = rangeState.outMs;
-                                        if (inMs == null && outMs == null) return const SizedBox.shrink();
+                                        if (inMs == null && outMs == null && rangeState.savedRanges.isEmpty) {
+                                          return const SizedBox.shrink();
+                                        }
                                         final effectiveIn = inMs ?? 0;
                                         final effectiveOut = outMs ?? totalDurationMs;
-                                        final hasBand = effectiveOut > effectiveIn;
+                                        final hasBand = (inMs != null || outMs != null) && effectiveOut > effectiveIn;
                                         final leftX = (effectiveIn / 1000) * pxPerSec;
                                         final rightX = (effectiveOut / 1000) * pxPerSec;
 
                                         return Stack(
                                           clipBehavior: Clip.none,
                                           children: [
+                                            // Saved multiple ranges
+                                            for (int i = 0; i < rangeState.savedRanges.length; i++) ...[
+                                              Builder(
+                                                builder: (_) {
+                                                  final r = rangeState.savedRanges[i];
+                                                  final rLeft = (r.startMs / 1000) * pxPerSec;
+                                                  final rRight = (r.endMs / 1000) * pxPerSec;
+                                                  return Stack(
+                                                    clipBehavior: Clip.none,
+                                                    children: [
+                                                      Positioned(
+                                                        left: rLeft,
+                                                        top: 0,
+                                                        bottom: 0,
+                                                        width: (rRight - rLeft).clamp(2.0, double.infinity),
+                                                        child: IgnorePointer(
+                                                          child: Container(
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.tealAccent.withValues(alpha: 0.12),
+                                                              border: const Border(
+                                                                left: BorderSide(color: Colors.tealAccent, width: 1.5),
+                                                                right: BorderSide(color: Colors.tealAccent, width: 1.5),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      // Badge #i + remove button
+                                                      Positioned(
+                                                        left: rLeft + 8,
+                                                        top: 2,
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.teal.shade700,
+                                                            borderRadius: BorderRadius.circular(3),
+                                                          ),
+                                                          child: Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              Text('#${i + 1}', style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                                                              const SizedBox(width: 3),
+                                                              GestureDetector(
+                                                                onTap: () => rangeNotifier.removeSavedRange(i),
+                                                                child: const Icon(Icons.close, size: 9, color: Colors.white),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      // Draggable Left Handle
+                                                      Positioned(
+                                                        left: rLeft - 6,
+                                                        top: 0,
+                                                        width: 12,
+                                                        height: 22,
+                                                        child: MouseRegion(
+                                                          cursor: SystemMouseCursors.resizeLeftRight,
+                                                          child: GestureDetector(
+                                                            behavior: HitTestBehavior.opaque,
+                                                            onHorizontalDragUpdate: (d) {
+                                                              final deltaMs = ((d.delta.dx / pxPerSec) * 1000).round();
+                                                              final cur = ref.read(exportRangeProvider).savedRanges[i];
+                                                              final nextStart = (cur.startMs + deltaMs).clamp(0, cur.endMs - 200);
+                                                              rangeNotifier.updateSavedRange(i, cur.copyWith(startMs: nextStart));
+                                                            },
+                                                            child: Container(
+                                                              alignment: Alignment.center,
+                                                              decoration: BoxDecoration(color: Colors.tealAccent, borderRadius: BorderRadius.circular(2)),
+                                                              child: const Text('[', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      // Draggable Right Handle
+                                                      Positioned(
+                                                        left: rRight - 6,
+                                                        top: 0,
+                                                        width: 12,
+                                                        height: 22,
+                                                        child: MouseRegion(
+                                                          cursor: SystemMouseCursors.resizeLeftRight,
+                                                          child: GestureDetector(
+                                                            behavior: HitTestBehavior.opaque,
+                                                            onHorizontalDragUpdate: (d) {
+                                                              final deltaMs = ((d.delta.dx / pxPerSec) * 1000).round();
+                                                              final cur = ref.read(exportRangeProvider).savedRanges[i];
+                                                              final maxEnd = totalDurationMs > cur.startMs + 200 ? totalDurationMs : cur.startMs + 200;
+                                                              final nextEnd = (cur.endMs + deltaMs).clamp(cur.startMs + 200, maxEnd);
+                                                              rangeNotifier.updateSavedRange(i, cur.copyWith(endMs: nextEnd));
+                                                            },
+                                                            child: Container(
+                                                              alignment: Alignment.center,
+                                                              decoration: BoxDecoration(color: Colors.tealAccent, borderRadius: BorderRadius.circular(2)),
+                                                              child: const Text(']', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                            // Active In/Out range
                                             if (hasBand)
                                               Positioned(
                                                 left: leftX,
