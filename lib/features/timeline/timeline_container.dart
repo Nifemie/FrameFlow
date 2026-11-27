@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/time_parser.dart';
 import '../../../models/timeline_track_item.dart';
 import '../../../providers/export_range_provider.dart';
 import '../../../providers/project_provider.dart';
@@ -85,6 +86,107 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
     final pxPerSec = TimelineZoomController.pxPerSec(zoom);
     final (snapped, _) = _snapPlayheadMs(ms, pxPerSec);
     ref.read(playbackControllerProvider).seek(snapped);
+  }
+
+  Future<void> _showRulerContextMenu(
+    BuildContext context,
+    TapUpDetails details,
+    int clickMs,
+    int totalDurationMs,
+  ) async {
+    final rangeState = ref.read(exportRangeProvider);
+    final rangeNotifier = ref.read(exportRangeProvider.notifier);
+    final timeLabel = TimeParser.formatStandard(clickMs);
+
+    final selected = await showMenu<String>(
+      context: context,
+      color: AppColors.surface,
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 360),
+      position: RelativeRect.fromLTRB(
+        details.globalPosition.dx,
+        details.globalPosition.dy,
+        details.globalPosition.dx,
+        details.globalPosition.dy,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'set_in',
+          child: Row(children: [
+            const Icon(Icons.first_page, size: 15, color: AppColors.exportGreen),
+            const SizedBox(width: 8),
+            Flexible(child: Text('Set Export In Point ($timeLabel)', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white))),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'set_out',
+          child: Row(children: [
+            const Icon(Icons.last_page, size: 15, color: AppColors.exportGreen),
+            const SizedBox(width: 8),
+            Flexible(child: Text('Set Export Out Point ($timeLabel)', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white))),
+          ]),
+        ),
+        if (rangeState.hasRange)
+          const PopupMenuItem(
+            value: 'queue_range',
+            child: Row(children: [
+              Icon(Icons.playlist_add, size: 15, color: AppColors.exportGreen),
+              SizedBox(width: 8),
+              Text('Add Range to Export Queue', style: TextStyle(fontSize: 12, color: Colors.white)),
+            ]),
+          ),
+        if (rangeState.inMs != null || rangeState.outMs != null)
+          const PopupMenuItem(
+            value: 'clear_range',
+            child: Row(children: [
+              Icon(Icons.clear_all, size: 15, color: Colors.white70),
+              SizedBox(width: 8),
+              Text('Clear Export Range', style: TextStyle(fontSize: 12, color: Colors.white)),
+            ]),
+          ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'add_marker',
+          child: Row(children: [
+            const Icon(Icons.bookmark_add_outlined, size: 15, color: Colors.amber),
+            const SizedBox(width: 8),
+            Flexible(child: Text('Add Marker Here ($timeLabel)', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white))),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'seek_here',
+          child: Row(children: [
+            const Icon(Icons.my_location, size: 15, color: AppColors.accentOrange),
+            const SizedBox(width: 8),
+            Flexible(child: Text('Move Playhead Here ($timeLabel)', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white))),
+          ]),
+        ),
+      ],
+    );
+
+    if (!mounted || selected == null) return;
+    switch (selected) {
+      case 'set_in':
+        rangeNotifier.setInPoint(clickMs, totalDurationMs: totalDurationMs);
+        break;
+      case 'set_out':
+        rangeNotifier.setOutPoint(clickMs, totalDurationMs: totalDurationMs);
+        break;
+      case 'queue_range':
+        if (rangeState.activeRange != null) {
+          rangeNotifier.addRange(rangeState.activeRange!);
+        }
+        break;
+      case 'clear_range':
+        rangeNotifier.clearRange();
+        break;
+      case 'add_marker':
+        final count = ref.read(projectProvider).markers.length + 1;
+        ref.read(projectProvider.notifier).addMarker(clickMs, label: 'Marker $count');
+        break;
+      case 'seek_here':
+        _handleSeek(clickMs);
+        break;
+    }
   }
 
   void _handleNeedleDragStart(DragStartDetails d, int ms, double pxPerSec) {
@@ -514,6 +616,7 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                           onSeek: _handleSeek,
                                           onScrub: (ms) => ref.read(playbackControllerProvider).scrub(ms),
                                           onScrubEnd: () => ref.read(playbackControllerProvider).seek(ref.read(playheadPositionProvider), syncAudioImmediately: true),
+                                          onSecondaryTapUp: (details, clickMs) => _showRulerContextMenu(context, details, clickMs, totalDurationMs),
                                         ),
                                         const SizedBox(height: 6),
                                         Expanded(

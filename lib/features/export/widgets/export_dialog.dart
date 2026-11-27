@@ -63,10 +63,13 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
 
   ({int startMs, int endMs})? _parseValidatedRange(int totalDurationMs) {
     final s = TimeParser.parseToMs(_startCtrl.text.trim());
-    final e = TimeParser.parseToMs(_endCtrl.text.trim());
+    var e = TimeParser.parseToMs(_endCtrl.text.trim());
     if (s == null || e == null) {
       setState(() => _rangeError = 'Enter valid timecodes (e.g. 00:05.00)');
       return null;
+    }
+    if (e > totalDurationMs && e - totalDurationMs <= 20) {
+      e = totalDurationMs;
     }
     if (s < 0 || e > totalDurationMs) {
       setState(() => _rangeError = 'Range must stay within 00:00.00 – ${TimeParser.formatStandard(totalDurationMs)}');
@@ -288,23 +291,46 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('Queued Ranges', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
-                                  TextButton.icon(
+                                  Text(
+                                    'Queued Ranges (${rangeState.savedRanges.length})',
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                                  ),
+                                  ElevatedButton.icon(
                                     onPressed: () {
                                       final parsed = _parseValidatedRange(project.totalDurationMs);
                                       if (parsed != null) {
-                                        rangeNotifier.addRange(ExportRange(startMs: parsed.startMs, endMs: parsed.endMs));
+                                        final newRange = ExportRange(startMs: parsed.startMs, endMs: parsed.endMs);
+                                        if (rangeState.savedRanges.contains(newRange)) {
+                                          setState(() => _rangeError = 'Range already in queue — adjust In/Out above to add another.');
+                                          return;
+                                        }
+                                        rangeNotifier.addRange(newRange);
+                                        // Advance In/Out inputs to suggest the next segment
+                                        final nextStart = parsed.endMs < project.totalDurationMs ? parsed.endMs : 0;
+                                        final nextEnd = (nextStart + 5000).clamp(nextStart, project.totalDurationMs);
+                                        if (nextEnd > nextStart) {
+                                          _startCtrl.text = TimeParser.formatStandard(nextStart);
+                                          _endCtrl.text = TimeParser.formatStandard(nextEnd);
+                                        }
+                                        setState(() => _rangeError = null);
                                       }
                                     },
-                                    icon: const Icon(Icons.add, size: 14, color: AppColors.exportGreen),
-                                    label: const Text('Add Range', style: TextStyle(fontSize: 11, color: AppColors.exportGreen)),
-                                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), minimumSize: Size.zero),
+                                    icon: const Icon(Icons.add, size: 13),
+                                    label: const Text('Add Range', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.exportGreen.withValues(alpha: 0.2),
+                                      foregroundColor: AppColors.exportGreen,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 6),
                               if (rangeState.savedRanges.isEmpty)
-                                const Text('No ranges added yet. Enter Start/End above and click "+ Add Range".', style: TextStyle(fontSize: 10, color: AppColors.textMuted))
-                              else
+                                const Text('No ranges queued yet. Set In/Out above and click "+ Add Range".', style: TextStyle(fontSize: 10, color: AppColors.textMuted))
+                              else ...[
                                 Wrap(
                                   spacing: 6,
                                   runSpacing: 6,
@@ -313,7 +339,7 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                                       Chip(
                                         backgroundColor: AppColors.surfaceLight,
                                         label: Text(
-                                          '${TimeParser.formatStandard(rangeState.savedRanges[i].startMs)} → ${TimeParser.formatStandard(rangeState.savedRanges[i].endMs)}',
+                                          '#${i + 1}  ${TimeParser.formatStandard(rangeState.savedRanges[i].startMs)} → ${TimeParser.formatStandard(rangeState.savedRanges[i].endMs)} (${(rangeState.savedRanges[i].durationMs / 1000).toStringAsFixed(1)}s)',
                                           style: const TextStyle(fontFamily: 'Consolas', fontSize: 10, color: Colors.white),
                                         ),
                                         deleteIcon: const Icon(Icons.close, size: 13, color: Colors.white70),
@@ -321,6 +347,12 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
                                       ),
                                   ],
                                 ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${rangeState.savedRanges.length} range(s) will be exported sequentially (_range1, _range2, ...).',
+                                  style: const TextStyle(fontSize: 10, color: AppColors.exportGreen),
+                                ),
+                              ],
                             ],
                             if (_rangeError != null) ...[
                               const SizedBox(height: 6),

@@ -8,6 +8,7 @@ class TimelineRuler extends StatelessWidget {
   final ValueChanged<int> onSeek;
   final ValueChanged<int>? onScrub;
   final VoidCallback? onScrubEnd;
+  final void Function(TapUpDetails details, int clickMs)? onSecondaryTapUp;
 
   const TimelineRuler({
     super.key,
@@ -16,12 +17,17 @@ class TimelineRuler extends StatelessWidget {
     required this.onSeek,
     this.onScrub,
     this.onScrubEnd,
+    this.onSecondaryTapUp,
   });
 
-  void _seekToPosition(double localDx, {bool isScrub = false}) {
+  int _msAt(double localDx) {
     final maxSec = totalDurationMs > 0 ? (totalDurationMs / 1000.0) : 3600.0;
     final sec = (localDx / pixelsPerSecond).clamp(0.0, maxSec);
-    final ms = (sec * 1000).round();
+    return (sec * 1000).round();
+  }
+
+  void _seekToPosition(double localDx, {bool isScrub = false}) {
+    final ms = _msAt(localDx);
     if (isScrub && onScrub != null) {
       onScrub!(ms);
     } else {
@@ -39,6 +45,9 @@ class TimelineRuler extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (details) => _seekToPosition(details.localPosition.dx),
+        onSecondaryTapUp: onSecondaryTapUp != null
+            ? (details) => onSecondaryTapUp!(details, _msAt(details.localPosition.dx))
+            : null,
         onHorizontalDragStart: (details) => _seekToPosition(details.localPosition.dx, isScrub: true),
         onHorizontalDragUpdate: (details) => _seekToPosition(details.localPosition.dx, isScrub: true),
         onHorizontalDragEnd: (_) => onScrubEnd?.call(),
