@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Workspace Focus Modes as specified in the PRD.
@@ -38,17 +39,19 @@ final timelineZoomProvider = StateProvider<double>((ref) => 1.0);
 /// Tracks whether CapCut-style magnetic snapping is active on the timeline.
 final snappingEnabledProvider = StateProvider<bool>((ref) => true);
 
-/// Preview playback decoding quality (controls decode resolution for smooth scrubbing/playback).
+/// Preview playback decoding quality (controls decode resolution & filter quality
+/// for smooth playback on low-end PCs; never affects final FFmpeg export quality).
 enum PreviewQuality {
-  high('High', null),
-  standard('Standard', 1280),
-  medium('Medium', 854),
-  low('Low', 640),
-  veryLow('Very Low', 360);
+  high('High', null, FilterQuality.high),
+  standard('Standard', 1280, FilterQuality.medium),
+  medium('Medium', 854, FilterQuality.low),
+  low('Low', 640, FilterQuality.low),
+  veryLow('Very Low', 360, FilterQuality.none);
 
   final String label;
   final int? cacheWidth;
-  const PreviewQuality(this.label, this.cacheWidth);
+  final FilterQuality filterQuality;
+  const PreviewQuality(this.label, this.cacheWidth, this.filterQuality);
 }
 
 final previewQualityProvider = StateProvider<PreviewQuality>((ref) => PreviewQuality.standard);

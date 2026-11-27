@@ -106,24 +106,65 @@ class _PreviewCanvasState extends ConsumerState<PreviewCanvas> {
       return _buildVideoContent(item);
     }
 
-    final cacheW = ref.watch(previewQualityProvider).cacheWidth;
+    final quality = ref.watch(previewQualityProvider);
+    final cacheW = quality.cacheWidth;
+    final fq = quality.filterQuality;
     final imageFile = File(item.filePath);
     switch (item.fitMode) {
       case ImageFitMode.fit:
-        return Center(child: Image.file(imageFile, cacheWidth: cacheW, gaplessPlayback: true, fit: BoxFit.contain, errorBuilder: (_, err, _) => _buildError(err)));
+        return Image.file(
+          imageFile,
+          cacheWidth: cacheW,
+          filterQuality: fq,
+          gaplessPlayback: true,
+          fit: BoxFit.contain,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, err, _) => _buildError(err),
+        );
       case ImageFitMode.fill:
-        return Image.file(imageFile, cacheWidth: cacheW, gaplessPlayback: true, fit: BoxFit.cover, width: double.infinity, height: double.infinity, errorBuilder: (_, err, _) => _buildError(err));
+        return Image.file(
+          imageFile,
+          cacheWidth: cacheW,
+          filterQuality: fq,
+          gaplessPlayback: true,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, err, _) => _buildError(err),
+        );
       case ImageFitMode.blurredBackground:
         return Stack(
           fit: StackFit.expand,
           children: [
-            ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: 20, sigmaY: 20), child: Image.file(imageFile, cacheWidth: 200, gaplessPlayback: true, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink())),
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: Image.file(imageFile, cacheWidth: 200, filterQuality: FilterQuality.low, gaplessPlayback: true, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+            ),
             Container(color: Colors.black.withValues(alpha: 0.3)),
-            Center(child: Image.file(imageFile, cacheWidth: cacheW, gaplessPlayback: true, fit: BoxFit.contain, errorBuilder: (_, err, _) => _buildError(err))),
+            Image.file(
+              imageFile,
+              cacheWidth: cacheW,
+              filterQuality: fq,
+              gaplessPlayback: true,
+              fit: BoxFit.contain,
+              width: double.infinity,
+              height: double.infinity,
+              errorBuilder: (_, err, _) => _buildError(err),
+            ),
           ],
         );
       case ImageFitMode.center:
-        return Center(child: Image.file(imageFile, cacheWidth: cacheW, gaplessPlayback: true, fit: BoxFit.none, errorBuilder: (_, err, _) => _buildError(err)));
+        return Center(
+          child: Image.file(
+            imageFile,
+            cacheWidth: null,
+            filterQuality: fq,
+            gaplessPlayback: true,
+            fit: BoxFit.none,
+            errorBuilder: (_, err, _) => _buildError(err),
+          ),
+        );
     }
   }
 
