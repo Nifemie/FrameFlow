@@ -9,8 +9,10 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../providers/theme_provider.dart';
+import '../../../services/offline_timestamp_service.dart';
 import '../../../services/project_storage_service.dart';
 import '../../export/widgets/export_dialog.dart';
+import '../../timestamps/widgets/generate_timestamps_dialog.dart';
 import 'project_rename_dialog.dart';
 import 'shortcuts_dialog.dart';
 import 'theme_customizer_dialog.dart';
@@ -208,6 +210,51 @@ class TopNavBar extends ConsumerWidget {
                 tooltip: 'Keyboard Shortcuts',
                 splashRadius: 16,
                 onPressed: () => showDialog(context: context, builder: (_) => const ShortcutsDialog()),
+              ),
+              const SizedBox(width: 6),
+
+              // Generate Timestamps Button (unique indigo color, Export button style)
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: isVeryCompact ? 7 : 10, vertical: 7),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+                onPressed: () => showDialog(context: context, builder: (_) => const GenerateTimestampsDialog()),
+                icon: const Icon(Icons.record_voice_over_outlined, size: 15, color: Colors.white),
+                label: Text(
+                  isVeryCompact ? 'Timestamps' : 'Generate Timestamps',
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 4),
+              // View Last Generated Timestamps Table Icon
+              Consumer(
+                builder: (context, ref, _) {
+                  final hasLast = ref.watch(lastGeneratedTimestampsProvider) != null;
+                  return IconButton(
+                    icon: Icon(
+                      Icons.table_chart_outlined,
+                      size: 18,
+                      color: hasLast ? const Color(0xFF818CF8) : AppColors.textMuted,
+                    ),
+                    tooltip: hasLast ? 'View Last Timestamp Table' : 'No Generated Timestamps Yet',
+                    splashRadius: 16,
+                    onPressed: () {
+                      if (!hasLast) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Generate timestamps first to view the table.')),
+                        );
+                        return;
+                      }
+                      showDialog(
+                        context: context,
+                        builder: (_) => const GenerateTimestampsDialog(showLastResults: true),
+                      );
+                    },
+                  );
+                },
               ),
               const SizedBox(width: 6),
 

@@ -17,7 +17,9 @@ import '../../../providers/project_provider.dart';
 import '../../../services/offline_timestamp_service.dart';
 
 class GenerateTimestampsDialog extends ConsumerStatefulWidget {
-  const GenerateTimestampsDialog({super.key});
+  final bool showLastResults;
+
+  const GenerateTimestampsDialog({super.key, this.showLastResults = false});
 
   @override
   ConsumerState<GenerateTimestampsDialog> createState() => _GenerateTimestampsDialogState();
@@ -61,6 +63,17 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
     final tracks = project.effectiveTracks.where((t) => t.isVideoOrBg || t.type == TrackType.text).toList();
     if (tracks.isNotEmpty) {
       _selectedTargetTrackId = tracks.first.id;
+    }
+
+    if (widget.showLastResults) {
+      final last = ref.read(lastGeneratedTimestampsProvider);
+      if (last != null && last.rows.isNotEmpty) {
+        _rows = last.rows;
+        _activeAudioPath = last.audioPath;
+        _scriptCtrl.text = last.scriptText;
+        _granularity = last.granularity;
+        _formatMode = last.formatMode;
+      }
     }
 
     _posSub = _slicePlayer.stream.position.listen((pos) {
@@ -144,6 +157,13 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
         },
       );
       if (mounted) {
+        ref.read(lastGeneratedTimestampsProvider.notifier).state = LastGeneratedTimestamps(
+          audioPath: audioPath,
+          scriptText: script,
+          granularity: _granularity,
+          formatMode: _formatMode,
+          rows: rows,
+        );
         setState(() {
           _isGenerating = false;
           _rows = rows;

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/utils/time_parser.dart';
 import 'audio_probe_service.dart';
@@ -53,6 +54,24 @@ class GeneratedTimestampRow {
     }
   }
 }
+
+class LastGeneratedTimestamps {
+  final String audioPath;
+  final String scriptText;
+  final TimestampGranularity granularity;
+  final TimestampFormatMode formatMode;
+  final List<GeneratedTimestampRow> rows;
+
+  const LastGeneratedTimestamps({
+    required this.audioPath,
+    required this.scriptText,
+    required this.granularity,
+    required this.formatMode,
+    required this.rows,
+  });
+}
+
+final lastGeneratedTimestampsProvider = StateProvider<LastGeneratedTimestamps?>((ref) => null);
 
 class OfflineTimestampService {
   static Future<String?> findWhisperCli() async {
@@ -170,12 +189,16 @@ class OfflineTimestampService {
       final decoded = jsonDecode(await jsonFile.readAsString()) as Map<String, dynamic>;
       final recognized = parseWhisperJsonTokens(decoded);
 
-      return alignScriptToTokens(
+      onStatus?.call('Refining speech boundaries...');
+      final silences = await _detectSilences(ffmpeg, wavPath);
+
+      final aligned = alignScriptToTokens(
         scriptText: scriptText,
         recognizedTokens: recognized,
         granularity: granularity,
         totalAudioMs: audioDurationMs > 0 ? audioDurationMs : 10000,
       );
+      return snapToSpeechBoundaries(aligned, silences);
     } finally {
       try {
         tempDir.deleteSync(recursive: true);
@@ -216,8 +239,16 @@ class OfflineTimestampService {
           if (rawText.startsWith('[') && rawText.endsWith(']')) continue;
           final offsets = tok['offsets'] as Map<String, dynamic>?;
           if (offsets == null) continue;
-          final fromMs = offsets['from'] as int? ?? 0;
-          final toMs = offsets['to'] as int? ?? fromMs;
+          int fromMs = offsets['from'] as int? ?? 0;
+          int toMs = offsets['to'] as int? ?? fromMs;
+          final tDtw = tok['t_dtw'] as int? ?? -1;
+          if (tDtw > 0) {
+            final dtwMs = tDtw * 10;
+            if (dtwMs >= fromMs && dtwMs <= toMs + 150) {
+              fromMs = min(fromMs, dtwMs);
+              toMs = max(toMs, dtwMs);
+            }
+          }
 
           // Subword pieces in Whisper start with a leading space when a new word begins
           if (rawText.startsWith(' ') && wordBuf.isNotEmpty) {
@@ -394,5 +425,67 @@ class OfflineTimestampService {
     if (normalized.isEmpty) return const [];
     final rawParts = normalized.split(RegExp(r'(?<=[.!?])\s+|\r?\n+'));
     return rawParts.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+  }
+
+  static Future<List<({int startMs, int endMs})>> _detectSilences(String ffmpeg, String wavPath) async {
+    try {
+      final res = await Process.run(ffmpeg, [
+        '-i', wavPath,
+        '-af', 'silencedetect=noise=-32dB:d=0.16',
+        '-f', 'null',
+        '-',
+      ]);
+      final stderrStr = res.stderr?.toString() ?? '';
+      final silences = <({int startMs, int endMs})>[];
+      int? currentStart;
+      for (final line in const LineSplitter().convert(stderrStr)) {
+        final sMatch = RegExp(r'silence_start:\s*([0-9.]+)').firstMatch(line);
+        if (sMatch != null) {
+          currentStart = ((double.tryParse(sMatch.group(1)!) ?? 0) * 1000).round();
+        }
+        final eMatch = RegExp(r'silence_end:\s*([0-9.]+)').firstMatch(line);
+        if (eMatch != null && currentStart != null) {
+          final endMs = ((double.tryParse(eMatch.group(1)!) ?? 0) * 1000).round();
+          if (endMs > currentStart) {
+            silences.add((startMs: currentStart, endMs: endMs));
+          }
+          currentStart = null;
+        }
+      }
+      return silences;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Snaps sentence/word start & end times to real acoustic speech boundaries
+  /// detected by FFmpeg `silencedetect`, eliminating trailing silence or early cutoffs.
+  static List<GeneratedTimestampRow> snapToSpeechBoundaries(
+    List<GeneratedTimestampRow> rows,
+    List<({int startMs, int endMs})> silences,
+  ) {
+    if (rows.isEmpty || silences.isEmpty) return rows;
+    for (int i = 0; i < rows.length; i++) {
+      final r = rows[i];
+      for (final s in silences) {
+        // If startMs sits inside silence, push it forward to where speech resumes
+        if (r.startMs >= s.startMs && r.startMs < s.endMs && s.endMs < r.endMs - 80) {
+          r.startMs = s.endMs;
+        }
+        // If endMs sits inside silence or within 220ms of a silence start, snap to silence start
+        if (r.endMs > s.startMs && r.endMs <= s.endMs && s.startMs > r.startMs + 80) {
+          r.endMs = s.startMs;
+        } else if ((r.endMs - s.startMs).abs() <= 220 && s.startMs > r.startMs + 80) {
+          r.endMs = s.startMs;
+        }
+      }
+      if (i > 0 && r.startMs < rows[i - 1].endMs) {
+        r.startMs = rows[i - 1].endMs;
+      }
+      if (r.endMs <= r.startMs) {
+        r.endMs = r.startMs + 80;
+      }
+    }
+    return rows;
   }
 }
