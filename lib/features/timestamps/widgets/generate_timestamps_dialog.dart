@@ -33,6 +33,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
   final TextEditingController _scriptCtrl = TextEditingController();
   TimestampGranularity _granularity = TimestampGranularity.sentence;
   TimestampFormatMode _formatMode = TimestampFormatMode.both;
+  bool _highAccuracy = false;
 
   bool _isGenerating = false;
   String _status = '';
@@ -151,6 +152,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
         audioPath: audioPath,
         scriptText: script,
         granularity: _granularity,
+        highAccuracy: _highAccuracy,
         onStatus: (s) {
           if (mounted) setState(() => _status = s);
         },
@@ -186,29 +188,45 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
       return;
     }
     _sliceTimer?.cancel();
-    await _slicePlayer.pause();
-    if (_openedAudioPath != _activeAudioPath) {
-      await _slicePlayer.setFilePath(_activeAudioPath!);
-      _openedAudioPath = _activeAudioPath;
-    }
-    await _slicePlayer.seek(Duration(milliseconds: row.startMs));
-    if (!mounted) return;
-    setState(() {
-      _playingRowIndex = row.index;
-    });
-    _slicePlayer.play();
-    final sliceMs = (row.endMs - row.startMs).clamp(150, 600000);
-    _sliceTimer = Timer(Duration(milliseconds: sliceMs), () {
-      if (mounted && _playingRowIndex == row.index) {
-        _stopAudioSlice();
+    try {
+      if (_openedAudioPath != null) {
+        await _slicePlayer.pause();
       }
-    });
+      if (_openedAudioPath != _activeAudioPath) {
+        await _slicePlayer.setFilePath(_activeAudioPath!);
+        _openedAudioPath = _activeAudioPath;
+      }
+      await _slicePlayer.setVolume(1.0);
+      await _slicePlayer.seek(Duration(milliseconds: row.startMs));
+      if (!mounted) return;
+      setState(() {
+        _playingRowIndex = row.index;
+      });
+      _slicePlayer.play();
+      final sliceMs = (row.endMs - row.startMs).clamp(150, 600000);
+      _sliceTimer = Timer(Duration(milliseconds: sliceMs), () {
+        if (mounted && _playingRowIndex == row.index) {
+          _stopAudioSlice();
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _playingRowIndex = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Audio slice playback error: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _stopAudioSlice() async {
     _sliceTimer?.cancel();
     _sliceTimer = null;
-    await _slicePlayer.pause();
+    try {
+      if (_openedAudioPath != null) {
+        await _slicePlayer.pause();
+      }
+    } catch (_) {}
     if (mounted) {
       setState(() => _playingRowIndex = null);
     }
@@ -413,6 +431,28 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
                       .map((m) => DropdownMenuItem(value: m, child: Text(m.label, style: const TextStyle(fontSize: 11.5))))
                       .toList(),
                   onChanged: (v) { if (v != null) setState(() => _formatMode = v); },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: ChoiceChip(
+                  label: const Text('Fast (tiny.en)', style: TextStyle(fontSize: 11)),
+                  selected: !_highAccuracy,
+                  selectedColor: AppColors.accentOrange.withValues(alpha: 0.25),
+                  onSelected: (_) => setState(() => _highAccuracy = false),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ChoiceChip(
+                  label: const Text('High Accuracy (base.en)', style: TextStyle(fontSize: 11)),
+                  selected: _highAccuracy,
+                  selectedColor: AppColors.accentOrange.withValues(alpha: 0.25),
+                  onSelected: (_) => setState(() => _highAccuracy = true),
                 ),
               ),
             ],

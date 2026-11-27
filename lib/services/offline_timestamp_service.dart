@@ -95,20 +95,33 @@ class OfflineTimestampService {
     return null;
   }
 
-  static Future<String?> findWhisperModel() async {
-    for (final p in [
-      'assets/bin/ggml-base.en.bin',
-      'assets/bin/ggml-tiny.en.bin',
-      'assets/bin/ggml-base.bin',
-      'assets/bin/ggml-tiny.bin',
-      'data/flutter_assets/assets/bin/ggml-base.en.bin',
-      'data/flutter_assets/assets/bin/ggml-tiny.en.bin',
-    ]) {
+  static Future<String?> findWhisperModel({bool highAccuracy = false}) async {
+    final candidates = highAccuracy
+        ? [
+            'assets/bin/ggml-base.en.bin',
+            'assets/bin/ggml-tiny.en.bin',
+            'assets/bin/ggml-base.bin',
+            'assets/bin/ggml-tiny.bin',
+            'data/flutter_assets/assets/bin/ggml-base.en.bin',
+            'data/flutter_assets/assets/bin/ggml-tiny.en.bin',
+          ]
+        : [
+            'assets/bin/ggml-tiny.en.bin',
+            'assets/bin/ggml-base.en.bin',
+            'assets/bin/ggml-tiny.bin',
+            'assets/bin/ggml-base.bin',
+            'data/flutter_assets/assets/bin/ggml-tiny.en.bin',
+            'data/flutter_assets/assets/bin/ggml-base.en.bin',
+          ];
+    for (final p in candidates) {
       if (File(p).existsSync()) return p;
     }
     try {
       final exeDir = File(Platform.resolvedExecutable).parent.path;
-      for (final name in ['ggml-base.en.bin', 'ggml-tiny.en.bin', 'ggml-base.bin', 'ggml-tiny.bin']) {
+      final names = highAccuracy
+          ? ['ggml-base.en.bin', 'ggml-tiny.en.bin', 'ggml-base.bin', 'ggml-tiny.bin']
+          : ['ggml-tiny.en.bin', 'ggml-base.en.bin', 'ggml-tiny.bin', 'ggml-base.bin'];
+      for (final name in names) {
         final candidate = '$exeDir\\data\\flutter_assets\\assets\\bin\\$name';
         if (File(candidate).existsSync()) return candidate;
         final sibling = '$exeDir\\$name';
@@ -122,6 +135,7 @@ class OfflineTimestampService {
     required String audioPath,
     required String scriptText,
     required TimestampGranularity granularity,
+    bool highAccuracy = false,
     void Function(String status)? onStatus,
   }) async {
     final ffmpeg = await FFmpegService.findFFmpeg();
@@ -132,7 +146,7 @@ class OfflineTimestampService {
       throw Exception('Offline speech engine (whisper-cli.exe) not found in assets/bin/.');
     }
 
-    final modelPath = await findWhisperModel();
+    final modelPath = await findWhisperModel(highAccuracy: highAccuracy);
     if (modelPath == null) {
       throw Exception('Offline speech model (ggml-tiny.en.bin) not found in assets/bin/.');
     }
@@ -170,9 +184,11 @@ class OfflineTimestampService {
               ? 'tiny.en'
               : (modelName.contains('base') ? 'base' : 'tiny'));
 
-      final wRes = await Process.run(whisperCli, [
+      final threads = Platform.numberOfProcessors.clamp(2, 8);
+      final whisperFuture = Process.run(whisperCli, [
         '-m', modelPath,
         '-f', wavPath,
+        '-t', '$threads',
         '-ojf',
         '-of', outBase,
         '-ml', '1',
@@ -180,6 +196,10 @@ class OfflineTimestampService {
         '-dtw', dtwModel,
         if (prompt.isNotEmpty) ...['--prompt', prompt],
       ]);
+      final silenceFuture = _detectSilences(ffmpeg, wavPath);
+
+      final wRes = await whisperFuture;
+      final silences = await silenceFuture;
 
       final jsonFile = File('$outBase.json');
       if (wRes.exitCode != 0 || !jsonFile.existsSync()) {
@@ -188,9 +208,6 @@ class OfflineTimestampService {
 
       final decoded = jsonDecode(await jsonFile.readAsString()) as Map<String, dynamic>;
       final recognized = parseWhisperJsonTokens(decoded);
-
-      onStatus?.call('Refining speech boundaries...');
-      final silences = await _detectSilences(ffmpeg, wavPath);
 
       final aligned = alignScriptToTokens(
         scriptText: scriptText,
