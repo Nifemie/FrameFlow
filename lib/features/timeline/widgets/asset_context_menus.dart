@@ -7,11 +7,14 @@ import '../../../models/audio_clip_item.dart';
 import '../../../models/image_item.dart';
 import '../../../models/text_overlay_item.dart';
 import '../../../models/timeline_track_item.dart';
+import '../../../providers/export_range_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../providers/theme_provider.dart';
 import '../../../services/playback_controller.dart';
 import '../../../services/video_playback_engine.dart';
 import '../../properties/widgets/video_range_dialog.dart';
+import '../../shell/widgets/advanced_color_picker_dialog.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
 import 'animation_randomisation_dialog.dart';
 import 'audio_volume_dialog.dart';
@@ -390,6 +393,24 @@ class AssetContextMenus {
           ),
         const PopupMenuDivider(),
         const PopupMenuItem(
+          value: 'set_export_in',
+          child: Row(children: [Icon(Icons.first_page, size: 15, color: AppColors.exportGreen), SizedBox(width: 8), Text('Set Export In Point (I)', style: TextStyle(fontSize: 12, color: Colors.white))]),
+        ),
+        const PopupMenuItem(
+          value: 'set_export_out',
+          child: Row(children: [Icon(Icons.last_page, size: 15, color: AppColors.exportGreen), SizedBox(width: 8), Text('Set Export Out Point (O)', style: TextStyle(fontSize: 12, color: Colors.white))]),
+        ),
+        if (ref.read(exportRangeProvider).hasRange)
+          const PopupMenuItem(
+            value: 'clear_export_range',
+            child: Row(children: [Icon(Icons.clear_all, size: 15, color: Colors.white70), SizedBox(width: 8), Text('Clear Export Range', style: TextStyle(fontSize: 12, color: Colors.white))]),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'timeline_color',
+          child: Row(children: [Icon(Icons.color_lens_outlined, size: 15, color: AppColors.accentOrange), SizedBox(width: 8), Text('Change Timeline Color...', style: TextStyle(fontSize: 12, color: Colors.white))]),
+        ),
+        const PopupMenuItem(
           value: 'rename_track',
           child: Row(children: [Icon(Icons.edit, size: 15, color: AppColors.accentOrange), SizedBox(width: 8), Text('Rename Timeline...', style: TextStyle(fontSize: 12, color: Colors.white))]),
         ),
@@ -453,6 +474,30 @@ class AssetContextMenus {
         break;
       case 'pack_left':
         notifier.autoArrangeFromLeft(trackId: track.id);
+        break;
+      case 'set_export_in':
+        final playheadMs = ref.read(playheadPositionProvider);
+        final totalMs = ref.read(projectProvider).totalDurationMs;
+        ref.read(exportRangeProvider.notifier).setInPoint(playheadMs, totalDurationMs: totalMs);
+        break;
+      case 'set_export_out':
+        final playheadMs = ref.read(playheadPositionProvider);
+        final totalMs = ref.read(projectProvider).totalDurationMs;
+        ref.read(exportRangeProvider.notifier).setOutPoint(playheadMs, totalDurationMs: totalMs);
+        break;
+      case 'clear_export_range':
+        ref.read(exportRangeProvider.notifier).clearRange();
+        break;
+      case 'timeline_color':
+        final currentTimelineColor = ref.read(themeProvider).timelineColor;
+        showDialog<void>(
+          context: context,
+          builder: (_) => AdvancedColorPickerDialog(
+            title: 'Timeline & Background Color',
+            initialColor: currentTimelineColor,
+            onColorChanged: (c) => ref.read(themeProvider.notifier).updateColor('timeline', c),
+          ),
+        );
         break;
       case 'rename_track':
         showRenameTrackDialog(context, ref, track);

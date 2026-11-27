@@ -9,6 +9,7 @@ import '../models/project.dart';
 import '../models/text_overlay_item.dart';
 import 'audio_probe_service.dart';
 import 'ffmpeg_animation_filter_builder.dart';
+import 'project_slice_service.dart';
 
 class FFmpegService {
   Process? _activeProcess;
@@ -41,11 +42,24 @@ class FFmpegService {
     return _findDefaultSystemFont();
   }
 
-  Future<bool> renderVideo({required Project project, required ExportConfig config, required void Function(double progress, String status) onProgress}) async {
+  Future<bool> renderVideo({
+    required Project project,
+    required ExportConfig config,
+    required void Function(double progress, String status) onProgress,
+    int? rangeStartMs,
+    int? rangeEndMs,
+  }) async {
     _isCancelled = false;
     final ffmpegPath = await findFFmpeg();
     if (ffmpegPath == null) throw Exception('FFmpeg executable not found.');
-    if (project.images.isEmpty) throw Exception('Project has no images to export.');
+
+    final isRange = rangeStartMs != null && rangeEndMs != null && rangeEndMs > rangeStartMs;
+    final activeProject = isRange
+        ? ProjectSliceService.sliceProject(project, rangeStartMs, rangeEndMs)
+        : project;
+    final targetDurationMs = isRange ? (rangeEndMs - rangeStartMs) : activeProject.totalDurationMs;
+    if (!isRange && activeProject.images.isEmpty) throw Exception('Project has no images to export.');
+    if (targetDurationMs <= 0) throw Exception('Export duration must be greater than 0.');
 
     final tempDir = Directory.systemTemp.createTempSync('frameflow_export_');
     final concatFile = File('${tempDir.path}\\concat.txt'), blackMp4 = File('${tempDir.path}\\black.mp4');
@@ -63,7 +77,7 @@ class FFmpegService {
       ]);
       final safeBlackPath = blackMp4.path.replaceAll(r'\', '/');
 
-      final exportClips = List<ImageItem>.from(project.images)..sort((a, b) => a.startMs.compareTo(b.startMs));
+      final exportClips = List<ImageItem>.from(activeProject.images)..sort((a, b) => a.startMs.compareTo(b.startMs));
       final normPaths = List<String>.filled(exportClips.length, safeBlackPath);
 
       // Concurrency worker pool (run up to 6 clips in parallel across CPU cores)
@@ -78,7 +92,7 @@ class FFmpegService {
           i = nextIdx++;
           final img = exportClips[i], durSec = max(0.2, img.durationMs / 1000.0), target = File('${tempDir.path}\\norm_$i.mp4');
           final clipVf = FFmpegAnimationFilterBuilder.buildClipFilter(item: img, width: width, height: height, fps: config.fps);
-          final isMuted = !project.isTrackVisible(img.trackId) || img.isMuted || project.isTrackMuted(img.trackId);
+          final isMuted = !activeProject.isTrackVisible(img.trackId) || img.isMuted || activeProject.isTrackMuted(img.trackId);
 
           if (img.isColorBackground) {
             final hex = (img.backgroundColorValue ?? 0xFF000000).toRadixString(16).padLeft(8, '0').substring(2);
@@ -145,7 +159,9 @@ class FFmpegService {
         }
       }
 
-      await Future.wait(List.generate(poolSize, (_) => worker()));
+      if (exportClips.isNotEmpty) {
+        await Future.wait(List.generate(poolSize, (_) => worker()));
+      }
       if (_isCancelled) { _cleanup(config.outputPath); return false; }
 
       final buffer = StringBuffer()..writeln('ffconcat version 1.0');
@@ -168,8 +184,8 @@ class FFmpegService {
         buffer.writeln("file '${normPaths[i].replaceAll("'", r"'\''")}'");
         currentMs = item.endMs;
       }
-      if (project.totalDurationMs > currentMs) {
-        final tailSec = ((project.totalDurationMs - currentMs) / 1000.0).toStringAsFixed(3), tailFile = File('${tempDir.path}\\gap_tail.mp4');
+      if (targetDurationMs > currentMs) {
+        final tailSec = ((targetDurationMs - currentMs) / 1000.0).toStringAsFixed(3), tailFile = File('${tempDir.path}\\gap_tail.mp4');
         await Process.run(ffmpegPath, [
           '-y',
           '-f', 'lavfi', '-i', 'color=c=black:s=${width}x$height:d=$tailSec:r=${config.fps}',
@@ -183,17 +199,17 @@ class FFmpegService {
       }
       await concatFile.writeAsString(buffer.toString());
 
-      final totalSec = project.totalDurationMs / 1000.0;
+      final totalSec = targetDurationMs / 1000.0;
       final args = <String>['-y', '-f', 'concat', '-safe', '0', '-i', concatFile.path];
 
-      final clips = List<AudioClipItem>.from(project.effectiveAudioClips)
+      final clips = List<AudioClipItem>.from(activeProject.effectiveAudioClips)
         ..sort((a, b) => a.startTimelineMs.compareTo(b.startTimelineMs));
-      final hasSeparateAudio = !project.isAudioMuted && (
+      final hasSeparateAudio = !activeProject.isAudioMuted && (
         (clips.isNotEmpty && File(clips.first.filePath).existsSync()) ||
-        (project.voiceOver != null && File(project.voiceOver!.filePath).existsSync())
+        (activeProject.voiceOver != null && File(activeProject.voiceOver!.filePath).existsSync())
       );
 
-      final textFilter = _buildTextFilters(project.textOverlays, height);
+      final textFilter = _buildTextFilters(activeProject.textOverlays, height);
 
       if (hasSeparateAudio) {
         final aConcat = File('${tempDir.path}\\audio_concat.txt'), aBuf = StringBuffer()..writeln('ffconcat version 1.0');
@@ -225,8 +241,8 @@ class FFmpegService {
           }
           curAudioMs = max(curAudioMs, c.endTimelineMs);
         }
-        if (project.totalDurationMs > curAudioMs) {
-          final tailGapSec = ((project.totalDurationMs - curAudioMs) / 1000.0).toStringAsFixed(3);
+        if (targetDurationMs > curAudioMs) {
+          final tailGapSec = ((targetDurationMs - curAudioMs) / 1000.0).toStringAsFixed(3);
           final tailSilence = File('${tempDir.path}\\audio_silence_tail.wav');
           await Process.run(ffmpegPath, ['-y', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100', '-t', tailGapSec, tailSilence.path]);
           if (tailSilence.existsSync()) {
@@ -274,7 +290,7 @@ class FFmpegService {
         if (match != null && totalSec > 0) {
           final cur = TimeParser.parseToMs(match.group(1)!) ?? 0;
           final pct = 0.40 + (((cur / 1000) / totalSec) * 0.56).clamp(0.0, 0.56);
-          onProgress(pct.clamp(0.40, 0.96), 'Rendering: ${match.group(1)} / ${TimeParser.formatStandard(project.totalDurationMs)} (${(pct * 100).toStringAsFixed(0)}%)');
+          onProgress(pct.clamp(0.40, 0.96), 'Rendering: ${match.group(1)} / ${TimeParser.formatStandard(targetDurationMs)} (${(pct * 100).toStringAsFixed(0)}%)');
         }
       });
 
@@ -284,7 +300,7 @@ class FFmpegService {
       if (exitCode != 0) throw Exception('FFmpeg failed with code $exitCode: ${errorLines.isNotEmpty ? errorLines.last : ''}');
 
       onProgress(0.97, 'Verifying exported file...');
-      final verified = await _verify(config.outputPath, project.totalDurationMs);
+      final verified = await _verify(config.outputPath, targetDurationMs);
       if (!verified) throw Exception('Exported file failed duration verification.');
       onProgress(1.0, 'Rendering Complete & Verified!');
       return true;

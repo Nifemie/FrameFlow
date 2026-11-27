@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/timeline_track_item.dart';
+import '../../../providers/export_range_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../providers/theme_provider.dart';
@@ -308,6 +309,74 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                // Export Range In / Out / Clear Controls
+                Consumer(
+                  builder: (context, ref, _) {
+                    final rangeState = ref.watch(exportRangeProvider);
+                    final rangeNotifier = ref.read(exportRangeProvider.notifier);
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        InkWell(
+                          onTap: () => rangeNotifier.setInPoint(
+                            ref.read(playheadPositionProvider),
+                            totalDurationMs: totalDurationMs,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: rangeState.inMs != null ? AppColors.exportGreen.withValues(alpha: 0.2) : AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: rangeState.inMs != null ? AppColors.exportGreen : AppColors.surfaceBorder),
+                            ),
+                            child: Text(
+                              'In (I)',
+                              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: rangeState.inMs != null ? AppColors.exportGreen : Colors.white70),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: () => rangeNotifier.setOutPoint(
+                            ref.read(playheadPositionProvider),
+                            totalDurationMs: totalDurationMs,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: rangeState.outMs != null ? AppColors.exportGreen.withValues(alpha: 0.2) : AppColors.surfaceLight,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: rangeState.outMs != null ? AppColors.exportGreen : AppColors.surfaceBorder),
+                            ),
+                            child: Text(
+                              'Out (O)',
+                              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: rangeState.outMs != null ? AppColors.exportGreen : Colors.white70),
+                            ),
+                          ),
+                        ),
+                        if (rangeState.inMs != null || rangeState.outMs != null) ...[
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: rangeNotifier.clearRange,
+                            borderRadius: BorderRadius.circular(4),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceLight,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: AppColors.surfaceBorder),
+                              ),
+                              child: const Icon(Icons.close, size: 11, color: Colors.white70),
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
                 const Spacer(),
                 IconButton(
                   icon: Icon(Icons.remove, size: 14, color: theme.iconColor('zoomOutIn', AppColors.textSecondary)),
@@ -523,6 +592,101 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                           ),
                                         ),
                                       ),
+
+                                    // Export In / Out Range Highlight & Draggable Handles
+                                    Consumer(
+                                      builder: (context, ref, _) {
+                                        final rangeState = ref.watch(exportRangeProvider);
+                                        final inMs = rangeState.inMs;
+                                        final outMs = rangeState.outMs;
+                                        if (inMs == null && outMs == null) return const SizedBox.shrink();
+                                        final effectiveIn = inMs ?? 0;
+                                        final effectiveOut = outMs ?? totalDurationMs;
+                                        final hasBand = effectiveOut > effectiveIn;
+                                        final leftX = (effectiveIn / 1000) * pxPerSec;
+                                        final rightX = (effectiveOut / 1000) * pxPerSec;
+
+                                        return Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            if (hasBand)
+                                              Positioned(
+                                                left: leftX,
+                                                top: 0,
+                                                bottom: 0,
+                                                width: (rightX - leftX).clamp(2.0, double.infinity),
+                                                child: IgnorePointer(
+                                                  child: Container(
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.exportGreen.withValues(alpha: 0.12),
+                                                      border: const Border(
+                                                        left: BorderSide(color: AppColors.exportGreen, width: 1.5),
+                                                        right: BorderSide(color: AppColors.exportGreen, width: 1.5),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            if (inMs != null)
+                                              Positioned(
+                                                left: leftX - 6,
+                                                top: 0,
+                                                width: 12,
+                                                height: 22,
+                                                child: MouseRegion(
+                                                  cursor: SystemMouseCursors.resizeLeftRight,
+                                                  child: GestureDetector(
+                                                    behavior: HitTestBehavior.opaque,
+                                                    onHorizontalDragUpdate: (d) {
+                                                      final deltaMs = ((d.delta.dx / pxPerSec) * 1000).round();
+                                                      final curIn = ref.read(exportRangeProvider).inMs ?? 0;
+                                                      final maxIn = (ref.read(exportRangeProvider).outMs ?? totalDurationMs) - 200;
+                                                      final nextIn = (curIn + deltaMs).clamp(0, maxIn < 0 ? 0 : maxIn);
+                                                      ref.read(exportRangeProvider.notifier).setInPoint(nextIn, totalDurationMs: totalDurationMs);
+                                                    },
+                                                    child: Container(
+                                                      alignment: Alignment.center,
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors.exportGreen,
+                                                        borderRadius: BorderRadius.circular(2),
+                                                      ),
+                                                      child: const Text('[', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            if (outMs != null)
+                                              Positioned(
+                                                left: rightX - 6,
+                                                top: 0,
+                                                width: 12,
+                                                height: 22,
+                                                child: MouseRegion(
+                                                  cursor: SystemMouseCursors.resizeLeftRight,
+                                                  child: GestureDetector(
+                                                    behavior: HitTestBehavior.opaque,
+                                                    onHorizontalDragUpdate: (d) {
+                                                      final deltaMs = ((d.delta.dx / pxPerSec) * 1000).round();
+                                                      final curOut = ref.read(exportRangeProvider).outMs ?? totalDurationMs;
+                                                      final minOut = (ref.read(exportRangeProvider).inMs ?? 0) + 200;
+                                                      final nextOut = (curOut + deltaMs).clamp(minOut, totalDurationMs > minOut ? totalDurationMs : minOut);
+                                                      ref.read(exportRangeProvider.notifier).setOutPoint(nextOut, totalDurationMs: totalDurationMs);
+                                                    },
+                                                    child: Container(
+                                                      alignment: Alignment.center,
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors.exportGreen,
+                                                        borderRadius: BorderRadius.circular(2),
+                                                      ),
+                                                      child: const Text(']', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        );
+                                      },
+                                    ),
 
                                     // Active Magnetic Snap Guide Line
                                     Consumer(

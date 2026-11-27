@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/time_parser.dart';
+import '../../providers/export_range_provider.dart';
 import '../../providers/project_provider.dart';
 import '../../providers/selection_provider.dart';
 import '../../providers/shortcut_provider.dart';
@@ -107,6 +108,22 @@ class _MainLayoutScreenState extends ConsumerState<MainLayoutScreen> {
       final ms = ref.read(playheadPositionProvider);
       final count = ref.read(projectProvider).markers.length + 1;
       notifier.addMarker(ms, label: 'Marker $count');
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyI) {
+      final ms = ref.read(playheadPositionProvider);
+      final totalMs = ref.read(projectProvider).totalDurationMs;
+      ref.read(exportRangeProvider.notifier).setInPoint(ms, totalDurationMs: totalMs);
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyO) {
+      final ms = ref.read(playheadPositionProvider);
+      final totalMs = ref.read(projectProvider).totalDurationMs;
+      ref.read(exportRangeProvider.notifier).setOutPoint(ms, totalDurationMs: totalMs);
+      return true;
+    }
+    if (HardwareKeyboard.instance.isAltPressed && event.logicalKey == LogicalKeyboardKey.keyX) {
+      ref.read(exportRangeProvider.notifier).clearRange();
       return true;
     }
     if (event.logicalKey == shortcuts.deleteKey || event.logicalKey == LogicalKeyboardKey.delete || event.logicalKey == LogicalKeyboardKey.backspace) {

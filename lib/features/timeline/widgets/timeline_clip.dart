@@ -68,13 +68,22 @@ class _TimelineClipState extends ConsumerState<TimelineClip> {
         }),
       );
     }
-    return Image.file(
-      File(item.filePath),
-      cacheWidth: 100,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => Container(
-        color: AppColors.surfaceBorder,
-        child: const Icon(Icons.image, size: 20, color: AppColors.textMuted),
+    final tileCount = (clipWidth / 56.0).ceil().clamp(1, 40);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: List.generate(
+        tileCount,
+        (_) => Expanded(
+          child: Image.file(
+            File(item.filePath),
+            cacheWidth: 160,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => Container(
+              color: AppColors.surfaceBorder,
+              child: const Icon(Icons.image, size: 20, color: AppColors.textMuted),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -114,7 +123,7 @@ class _TimelineClipState extends ConsumerState<TimelineClip> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(2),
                 child: Opacity(
-                  opacity: item.isVideo ? 0.88 : 0.55,
+                  opacity: item.isVideo ? 0.88 : 0.82,
                   child: _buildMediaThumbnail(item, clipWidth: width),
                 ),
               )
