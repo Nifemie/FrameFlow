@@ -88,6 +88,79 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
     ref.read(playbackControllerProvider).seek(snapped);
   }
 
+  Future<void> _showEditBoundaryTimeDialog({
+    required BuildContext context,
+    required String title,
+    required int currentMs,
+    required int minMs,
+    required int maxMs,
+    required ValueChanged<int> onSaved,
+  }) async {
+    final ctrl = TextEditingController(text: TimeParser.formatStandard(currentMs));
+    String? err;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Valid range: ${TimeParser.formatStandard(minMs)} – ${TimeParser.formatStandard(maxMs)}',
+                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                style: const TextStyle(fontFamily: 'Consolas', fontSize: 13, color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Timecode (e.g. 00:05.00)',
+                  errorText: err,
+                ),
+                onSubmitted: (_) {
+                  final parsed = TimeParser.parseToMs(ctrl.text.trim());
+                  if (parsed == null) {
+                    setState(() => err = 'Invalid time format');
+                    return;
+                  }
+                  if (parsed < minMs || parsed > maxMs) {
+                    setState(() => err = 'Must be between ${TimeParser.formatStandard(minMs)} and ${TimeParser.formatStandard(maxMs)}');
+                    return;
+                  }
+                  onSaved(parsed);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final parsed = TimeParser.parseToMs(ctrl.text.trim());
+                if (parsed == null) {
+                  setState(() => err = 'Invalid time format');
+                  return;
+                }
+                if (parsed < minMs || parsed > maxMs) {
+                  setState(() => err = 'Must be between ${TimeParser.formatStandard(minMs)} and ${TimeParser.formatStandard(maxMs)}');
+                  return;
+                }
+                onSaved(parsed);
+                Navigator.pop(ctx);
+              },
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showRulerContextMenu(
     BuildContext context,
     TapUpDetails details,
@@ -862,6 +935,14 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                                           cursor: SystemMouseCursors.resizeLeftRight,
                                                           child: GestureDetector(
                                                             behavior: HitTestBehavior.opaque,
+                                                            onSecondaryTapUp: (_) => _showEditBoundaryTimeDialog(
+                                                              context: context,
+                                                              title: 'Set Range #${i + 1} Start Time',
+                                                              currentMs: r.startMs,
+                                                              minMs: 0,
+                                                              maxMs: (r.endMs - 200).clamp(0, totalDurationMs),
+                                                              onSaved: (ms) => rangeNotifier.updateSavedRange(i, r.copyWith(startMs: ms)),
+                                                            ),
                                                             onHorizontalDragUpdate: (d) {
                                                               final deltaMs = ((d.delta.dx / pxPerSec) * 1000).round();
                                                               final cur = ref.read(exportRangeProvider).savedRanges[i];
@@ -886,6 +967,14 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                                           cursor: SystemMouseCursors.resizeLeftRight,
                                                           child: GestureDetector(
                                                             behavior: HitTestBehavior.opaque,
+                                                            onSecondaryTapUp: (_) => _showEditBoundaryTimeDialog(
+                                                              context: context,
+                                                              title: 'Set Range #${i + 1} End Time',
+                                                              currentMs: r.endMs,
+                                                              minMs: r.startMs + 200,
+                                                              maxMs: totalDurationMs > r.startMs + 200 ? totalDurationMs : r.startMs + 200,
+                                                              onSaved: (ms) => rangeNotifier.updateSavedRange(i, r.copyWith(endMs: ms)),
+                                                            ),
                                                             onHorizontalDragUpdate: (d) {
                                                               final deltaMs = ((d.delta.dx / pxPerSec) * 1000).round();
                                                               final cur = ref.read(exportRangeProvider).savedRanges[i];
@@ -935,6 +1024,14 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                                   cursor: SystemMouseCursors.resizeLeftRight,
                                                   child: GestureDetector(
                                                     behavior: HitTestBehavior.opaque,
+                                                    onSecondaryTapUp: (_) => _showEditBoundaryTimeDialog(
+                                                      context: context,
+                                                      title: 'Set In Point Time',
+                                                      currentMs: inMs,
+                                                      minMs: 0,
+                                                      maxMs: ((outMs ?? totalDurationMs) - 200).clamp(0, totalDurationMs),
+                                                      onSaved: (ms) => rangeNotifier.setInPoint(ms, totalDurationMs: totalDurationMs),
+                                                    ),
                                                     onHorizontalDragUpdate: (d) {
                                                       final deltaMs = ((d.delta.dx / pxPerSec) * 1000).round();
                                                       final curIn = ref.read(exportRangeProvider).inMs ?? 0;
@@ -963,6 +1060,14 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                                   cursor: SystemMouseCursors.resizeLeftRight,
                                                   child: GestureDetector(
                                                     behavior: HitTestBehavior.opaque,
+                                                    onSecondaryTapUp: (_) => _showEditBoundaryTimeDialog(
+                                                      context: context,
+                                                      title: 'Set Out Point Time',
+                                                      currentMs: outMs,
+                                                      minMs: (inMs ?? 0) + 200,
+                                                      maxMs: totalDurationMs > (inMs ?? 0) + 200 ? totalDurationMs : (inMs ?? 0) + 200,
+                                                      onSaved: (ms) => rangeNotifier.setOutPoint(ms, totalDurationMs: totalDurationMs),
+                                                    ),
                                                     onHorizontalDragUpdate: (d) {
                                                       final deltaMs = ((d.delta.dx / pxPerSec) * 1000).round();
                                                       final curOut = ref.read(exportRangeProvider).outMs ?? totalDurationMs;

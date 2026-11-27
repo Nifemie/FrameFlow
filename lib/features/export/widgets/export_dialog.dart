@@ -78,8 +78,11 @@ class _ExportDialogState extends ConsumerState<ExportDialog> {
     for (final r in rangeState.savedRanges) {
       _multiEntries.add(_EditableRangeEntry(r.startMs, r.endMs));
     }
-    if (_multiEntries.isEmpty && rangeState.hasRange) {
-      _multiEntries.add(_EditableRangeEntry(rangeState.inMs!, rangeState.outMs!));
+    if (rangeState.hasRange) {
+      final active = rangeState.activeRange!;
+      if (!rangeState.savedRanges.contains(active)) {
+        _multiEntries.add(_EditableRangeEntry(active.startMs, active.endMs));
+      }
     }
   }
 
