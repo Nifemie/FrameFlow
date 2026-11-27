@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:media_kit/media_kit.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/constants/app_constants.dart';
@@ -42,12 +42,11 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
   String? _activeAudioPath;
   String? _selectedTargetTrackId;
 
-  final Player _slicePlayer = Player();
-  StreamSubscription<Duration>? _posSub;
+  final AudioPlayer _slicePlayer = AudioPlayer();
+  StreamSubscription<PlayerState>? _stateSub;
   Timer? _sliceTimer;
   String? _openedAudioPath;
   int? _playingRowIndex;
-  int? _stopAtMs;
 
   @override
   void initState() {
@@ -76,9 +75,9 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
       }
     }
 
-    _posSub = _slicePlayer.stream.position.listen((pos) {
-      if (_stopAtMs != null && pos.inMilliseconds >= _stopAtMs!) {
-        _stopAudioSlice();
+    _stateSub = _slicePlayer.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        if (mounted) setState(() => _playingRowIndex = null);
       }
     });
   }
@@ -86,7 +85,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
   @override
   void dispose() {
     _sliceTimer?.cancel();
-    _posSub?.cancel();
+    _stateSub?.cancel();
     _slicePlayer.dispose();
     _scriptCtrl.dispose();
     super.dispose();
@@ -189,23 +188,16 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
     _sliceTimer?.cancel();
     await _slicePlayer.pause();
     if (_openedAudioPath != _activeAudioPath) {
-      await _slicePlayer.open(Media(_activeAudioPath!), play: false);
+      await _slicePlayer.setFilePath(_activeAudioPath!);
       _openedAudioPath = _activeAudioPath;
-      try {
-        await _slicePlayer.stream.duration
-            .firstWhere((d) => d > Duration.zero)
-            .timeout(const Duration(seconds: 2));
-      } catch (_) {}
     }
+    await _slicePlayer.seek(Duration(milliseconds: row.startMs));
+    if (!mounted) return;
     setState(() {
       _playingRowIndex = row.index;
-      _stopAtMs = row.endMs;
     });
-    await _slicePlayer.seek(Duration(milliseconds: row.startMs));
-    await Future<void>.delayed(const Duration(milliseconds: 30));
-    if (!mounted || _playingRowIndex != row.index) return;
-    await _slicePlayer.play();
-    final sliceMs = (row.endMs - row.startMs).clamp(120, 600000);
+    _slicePlayer.play();
+    final sliceMs = (row.endMs - row.startMs).clamp(150, 600000);
     _sliceTimer = Timer(Duration(milliseconds: sliceMs), () {
       if (mounted && _playingRowIndex == row.index) {
         _stopAudioSlice();
@@ -216,7 +208,6 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
   Future<void> _stopAudioSlice() async {
     _sliceTimer?.cancel();
     _sliceTimer = null;
-    _stopAtMs = null;
     await _slicePlayer.pause();
     if (mounted) {
       setState(() => _playingRowIndex = null);
