@@ -604,19 +604,24 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                             ),
                           ),
                         ),
-                        if (rangeState.savedRanges.isNotEmpty) ...[
+                        if (rangeState.savedRanges.isNotEmpty || rangeState.hasRange) ...[
                           const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                            decoration: BoxDecoration(
-                              color: Colors.tealAccent.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.6)),
-                            ),
-                            child: Text(
-                              '${rangeState.savedRanges.length} Range${rangeState.savedRanges.length == 1 ? '' : 's'}',
-                              style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.tealAccent),
-                            ),
+                          Builder(
+                            builder: (_) {
+                              final totalCount = rangeState.savedRanges.length + (rangeState.hasRange ? 1 : 0);
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  color: Colors.tealAccent.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.tealAccent.withValues(alpha: 0.6)),
+                                ),
+                                child: Text(
+                                  '$totalCount Range${totalCount == 1 ? '' : 's'}',
+                                  style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.tealAccent),
+                                ),
+                              );
+                            },
                           ),
                         ],
                         if (rangeState.inMs != null || rangeState.outMs != null) ...[
@@ -996,7 +1001,7 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                               ),
                                             ],
                                             // Active In/Out range
-                                            if (hasBand)
+                                            if (hasBand) ...[
                                               Positioned(
                                                 left: leftX,
                                                 top: 0,
@@ -1014,6 +1019,33 @@ class _TimelineContainerState extends ConsumerState<TimelineContainer> {
                                                   ),
                                                 ),
                                               ),
+                                              if (rangeState.hasRange)
+                                                Positioned(
+                                                  left: leftX + 8,
+                                                  top: 2,
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.exportGreen,
+                                                      borderRadius: BorderRadius.circular(3),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          '#${rangeState.savedRanges.length + 1}',
+                                                          style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Colors.white),
+                                                        ),
+                                                        const SizedBox(width: 3),
+                                                        GestureDetector(
+                                                          onTap: rangeNotifier.clearRange,
+                                                          child: const Icon(Icons.close, size: 9, color: Colors.white),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
                                             if (inMs != null)
                                               Positioned(
                                                 left: leftX - 6,
