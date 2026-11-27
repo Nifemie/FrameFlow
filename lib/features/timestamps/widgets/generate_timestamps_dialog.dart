@@ -42,6 +42,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
 
   final Player _slicePlayer = Player();
   StreamSubscription<Duration>? _posSub;
+  String? _openedAudioPath;
   int? _playingRowIndex;
   int? _stopAtMs;
 
@@ -163,12 +164,20 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
       await _stopAudioSlice();
       return;
     }
-    await _stopAudioSlice();
+    await _slicePlayer.pause();
+    if (_openedAudioPath != _activeAudioPath) {
+      await _slicePlayer.open(Media(_activeAudioPath!), play: false);
+      _openedAudioPath = _activeAudioPath;
+      try {
+        await _slicePlayer.stream.duration
+            .firstWhere((d) => d > Duration.zero)
+            .timeout(const Duration(seconds: 2));
+      } catch (_) {}
+    }
     setState(() {
       _playingRowIndex = row.index;
       _stopAtMs = row.endMs;
     });
-    await _slicePlayer.open(Media(_activeAudioPath!), play: false);
     await _slicePlayer.seek(Duration(milliseconds: row.startMs));
     await _slicePlayer.play();
   }
@@ -233,10 +242,10 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
 
     return Dialog(
       backgroundColor: AppColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Container(
-        width: _rows != null ? 720 : 540,
-        padding: const EdgeInsets.all(18),
+        width: _rows != null ? 880 : 540,
+        padding: const EdgeInsets.all(20),
         child: _rows == null
             ? _buildSetupView(audioClips)
             : _buildResultsView(targetTracks),
@@ -409,6 +418,8 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
 
   Widget _buildResultsView(List<TimelineTrackItem> targetTracks) {
     final rows = _rows!;
+    final tsColWidth = _formatMode == TimestampFormatMode.both ? 150.0 : 90.0;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -420,7 +431,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
             Expanded(
               child: Text(
                 'Generated Timestamps (${rows.length})',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
               ),
             ),
             TextButton.icon(
@@ -429,32 +440,34 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
                 setState(() => _rows = null);
               },
               icon: const Icon(Icons.arrow_back, size: 14),
-              label: const Text('Back', style: TextStyle(fontSize: 11.5)),
+              label: const Text('Back', style: TextStyle(fontSize: 12)),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
 
         // Table Header
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: AppColors.surfaceLight,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             border: Border.all(color: AppColors.surfaceBorder),
           ),
-          child: const Row(
+          child: Row(
             children: [
-              SizedBox(width: 34, child: Text('#', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
-              SizedBox(width: 170, child: Text('Timestamp', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
-              Expanded(child: Text('Word / Sentence', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
-              SizedBox(width: 82, child: Text('Audio', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
+              const SizedBox(width: 32, child: Text('#', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
+              SizedBox(width: tsColWidth, child: const Text('Timestamp', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('Word / Sentence', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
+              const SizedBox(width: 10),
+              const SizedBox(width: 80, child: Text('Audio', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondary))),
             ],
           ),
         ),
 
         ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 340),
+          constraints: const BoxConstraints(maxHeight: 460),
           child: Container(
             decoration: BoxDecoration(
               color: AppColors.background,
@@ -463,29 +476,36 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
                 right: BorderSide(color: AppColors.surfaceBorder),
                 bottom: BorderSide(color: AppColors.surfaceBorder),
               ),
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
             ),
             child: ListView.separated(
               shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: 4),
               itemCount: rows.length,
               separatorBuilder: (_, _) => const Divider(height: 1, color: AppColors.surfaceBorderSubtle),
               itemBuilder: (ctx, idx) {
                 final r = rows[idx];
                 final isPlayingThis = _playingRowIndex == r.index;
                 return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   child: Row(
                     children: [
                       SizedBox(
-                        width: 34,
-                        child: Text('${r.index}', style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, color: AppColors.accentOrange, fontWeight: FontWeight.bold)),
+                        width: 32,
+                        child: Text('${r.index}', style: const TextStyle(fontFamily: 'Consolas', fontSize: 11.5, color: AppColors.accentOrange, fontWeight: FontWeight.bold)),
                       ),
                       SizedBox(
-                        width: 170,
+                        width: tsColWidth,
                         child: TextFormField(
                           initialValue: r.formatTimestamp(_formatMode),
-                          style: const TextStyle(fontFamily: 'Consolas', fontSize: 11, color: Colors.white),
-                          decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6), border: OutlineInputBorder()),
+                          style: const TextStyle(fontFamily: 'Consolas', fontSize: 11.5, color: Colors.white),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            filled: true,
+                            fillColor: AppColors.surfaceLight,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
+                          ),
                           onChanged: (val) {
                             final parts = val.split(RegExp(r'\s*[-–→]\s*'));
                             if (_formatMode == TimestampFormatMode.both && parts.length == 2) {
@@ -505,26 +525,35 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
                           },
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: TextFormField(
                           initialValue: r.text,
-                          style: const TextStyle(fontSize: 11.5, color: Colors.white),
-                          decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6), border: OutlineInputBorder()),
+                          style: const TextStyle(fontSize: 12, color: Colors.white),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            filled: true,
+                            fillColor: AppColors.surfaceLight,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
+                          ),
                           onChanged: (val) => r.text = val,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                       SizedBox(
-                        width: 82,
-                        child: OutlinedButton.icon(
+                        width: 80,
+                        child: ElevatedButton.icon(
                           onPressed: () => _playAudioSlice(r),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                            side: BorderSide(color: isPlayingThis ? AppColors.accentOrange : AppColors.surfaceBorder),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isPlayingThis ? AppColors.accentOrange : AppColors.surfaceLight,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
                           ),
-                          icon: Icon(isPlayingThis ? Icons.stop : Icons.play_arrow, size: 14, color: AppColors.accentOrange),
-                          label: Text(isPlayingThis ? 'Stop' : 'Play', style: const TextStyle(fontSize: 10.5, color: Colors.white)),
+                          icon: Icon(isPlayingThis ? Icons.stop : Icons.play_arrow, size: 14, color: isPlayingThis ? Colors.white : AppColors.accentOrange),
+                          label: Text(isPlayingThis ? 'Stop' : 'Play', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                         ),
                       ),
                     ],
