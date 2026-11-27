@@ -42,6 +42,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
 
   final Player _slicePlayer = Player();
   StreamSubscription<Duration>? _posSub;
+  Timer? _sliceTimer;
   String? _openedAudioPath;
   int? _playingRowIndex;
   int? _stopAtMs;
@@ -71,6 +72,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
 
   @override
   void dispose() {
+    _sliceTimer?.cancel();
     _posSub?.cancel();
     _slicePlayer.dispose();
     _scriptCtrl.dispose();
@@ -164,6 +166,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
       await _stopAudioSlice();
       return;
     }
+    _sliceTimer?.cancel();
     await _slicePlayer.pause();
     if (_openedAudioPath != _activeAudioPath) {
       await _slicePlayer.open(Media(_activeAudioPath!), play: false);
@@ -179,10 +182,20 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
       _stopAtMs = row.endMs;
     });
     await _slicePlayer.seek(Duration(milliseconds: row.startMs));
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    if (!mounted || _playingRowIndex != row.index) return;
     await _slicePlayer.play();
+    final sliceMs = (row.endMs - row.startMs).clamp(120, 600000);
+    _sliceTimer = Timer(Duration(milliseconds: sliceMs), () {
+      if (mounted && _playingRowIndex == row.index) {
+        _stopAudioSlice();
+      }
+    });
   }
 
   Future<void> _stopAudioSlice() async {
+    _sliceTimer?.cancel();
+    _sliceTimer = null;
     _stopAtMs = null;
     await _slicePlayer.pause();
     if (mounted) {
@@ -226,7 +239,19 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
       return;
     }
 
-    final lines = rows.map((r) => '${TimeParser.formatStandard(r.startMs)} - ${TimeParser.formatStandard(r.endMs)}').toList();
+    final List<String> lines;
+    if (_formatMode == TimestampFormatMode.endingOnly) {
+      // Single ending timestamps -> each clip automatically starts where the previous ended (no gaps)
+      lines = rows.map((r) => TimeParser.formatStandard(r.endMs)).toList();
+    } else if (_formatMode == TimestampFormatMode.beginningOnly) {
+      // Continuous start-to-next-start ranges (no gaps)
+      lines = [
+        for (int i = 0; i < rows.length; i++)
+          '${TimeParser.formatStandard(rows[i].startMs)} - ${TimeParser.formatStandard(i + 1 < rows.length ? rows[i + 1].startMs : rows[i].endMs)}',
+      ];
+    } else {
+      lines = rows.map((r) => '${TimeParser.formatStandard(r.startMs)} - ${TimeParser.formatStandard(r.endMs)}').toList();
+    }
     notifier.applyBulkTimestamps(lines, trackId: trackId);
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(

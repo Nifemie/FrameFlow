@@ -140,10 +140,16 @@ class OfflineTimestampService {
 
       final audioDurationMs = await AudioProbeService.getAudioDurationMs(audioPath);
 
-      onStatus?.call('Aligning script with audio offline...');
+      onStatus?.call('Aligning script with audio offline (DTW)...');
       final outBase = '${tempDir.path}\\aligned';
-      final promptSnippet = scriptText.trim().replaceAll(RegExp(r'\s+'), ' ');
+      final promptSnippet = scriptText.trim().replaceAll(RegExp(r'<[^>]+>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
       final prompt = promptSnippet.length > 220 ? promptSnippet.substring(0, 220) : promptSnippet;
+      final modelName = modelPath.toLowerCase();
+      final dtwModel = modelName.contains('base.en')
+          ? 'base.en'
+          : (modelName.contains('tiny.en')
+              ? 'tiny.en'
+              : (modelName.contains('base') ? 'base' : 'tiny'));
 
       final wRes = await Process.run(whisperCli, [
         '-m', modelPath,
@@ -151,6 +157,8 @@ class OfflineTimestampService {
         '-ojf',
         '-of', outBase,
         '-ml', '1',
+        '-sow',
+        '-dtw', dtwModel,
         if (prompt.isNotEmpty) ...['--prompt', prompt],
       ]);
 
@@ -258,12 +266,16 @@ class OfflineTimestampService {
     final sentences = _splitIntoSentences(scriptText);
     if (sentences.isEmpty) return const [];
 
-    // Flatten script words while remembering which sentence each word belongs to
+    // Flatten spoken script words while remembering which sentence each word belongs to.
+    // Ignore non-spoken stage/pause annotations like <chuckle> or <short pause> during alignment.
     final scriptWords = <({String raw, String norm, int sentenceIdx})>[];
     for (int sIdx = 0; sIdx < sentences.length; sIdx++) {
-      final words = sentences[sIdx].split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+      final spokenOnly = sentences[sIdx].replaceAll(RegExp(r'<[^>]+>'), ' ');
+      final words = spokenOnly.split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
       for (final w in words) {
-        scriptWords.add((raw: w, norm: _norm(w), sentenceIdx: sIdx));
+        final norm = _norm(w);
+        if (norm.isEmpty) continue;
+        scriptWords.add((raw: w, norm: norm, sentenceIdx: sIdx));
       }
     }
     if (scriptWords.isEmpty) return const [];
