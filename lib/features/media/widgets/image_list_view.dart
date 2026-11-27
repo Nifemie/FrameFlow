@@ -10,6 +10,7 @@ import '../../../providers/selection_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../timeline/widgets/asset_context_menus.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
+import '../../timestamps/widgets/generate_timestamps_dialog.dart';
 import 'folder_import_dialog.dart';
 import 'image_card.dart';
 
@@ -85,6 +86,13 @@ class _ImageListViewState extends ConsumerState<ImageListView> {
                     constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                     tooltip: 'Add Color Matte to ${_targetTrack == "track_bg" ? "Underlay Track" : "Selected Track"}', splashRadius: 14,
                     onPressed: () => ref.read(projectProvider.notifier).addColorBackground(trackId: _targetTrack == 'all' ? 'track_v1' : _targetTrack),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.record_voice_over_outlined, size: 16, color: theme.iconColor('generateTimestamps', theme.buttonColor)),
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    tooltip: 'Generate Offline Timestamps (Audio + Script)', splashRadius: 14,
+                    onPressed: () => showDialog(context: context, builder: (_) => const GenerateTimestampsDialog()),
                   ),
                   IconButton(
                     icon: Icon(Icons.playlist_add_check, size: 16, color: theme.iconColor('bulkTimestamps', theme.buttonColor)),

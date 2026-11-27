@@ -49,6 +49,7 @@ windows/flutter/ephemeral/
 
 # Large binaries (exceeds GitHub 100MB limit)
 assets/bin/*.exe
+assets/bin/*.bin
 *.exe
 *.zip
 *.lnk
