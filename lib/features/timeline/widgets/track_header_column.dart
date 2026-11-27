@@ -8,6 +8,7 @@ import '../../../models/timeline_track_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../providers/theme_provider.dart';
+import '../../../services/offline_timestamp_service.dart';
 import '../../../services/playback_controller.dart';
 import '../../../services/video_playback_engine.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
@@ -98,12 +99,19 @@ class TrackHeaderColumn extends ConsumerWidget {
               itemBuilder: (context, idx) {
                 final tr = tracks[idx];
                 final isVideo = tr.isVideoOrBg;
+                final hasAudioCues = tr.type == TrackType.audio && project.effectiveAudioClips.any((c) => c.wordCues.isNotEmpty);
+                final showAudioCues = ref.watch(showAudioWordCuesProvider) && hasAudioCues;
                 final defaultBadgeColor = tr.type == TrackType.overlayVideo ? AppColors.accentOrange : (tr.type == TrackType.backgroundUnderlay ? Colors.purpleAccent : (tr.type == TrackType.text ? Colors.amber : (tr.type == TrackType.audio ? AppColors.waveform : AppColors.clipBlue)));
                 final badgeColor = tr.customColor ?? defaultBadgeColor;
 
                 return _buildRow(
-                  context: context, label: tr.name, height: isVideo ? 64 : (tr.type == TrackType.text ? 32 : 38),
+                  context: context, label: tr.name, height: isVideo ? 64 : (tr.type == TrackType.text ? 32 : (showAudioCues ? 60 : 38)),
                   isVisible: tr.isVisible, isMuted: tr.isMuted, badgeColor: badgeColor, customColor: tr.customColor,
+                  hasWordCues: hasAudioCues,
+                  showWordCues: showAudioCues,
+                  onToggleWordCues: hasAudioCues
+                      ? () => ref.read(showAudioWordCuesProvider.notifier).state = !ref.read(showAudioWordCuesProvider)
+                      : null,
                   onRename: () => AssetContextMenus.showRenameTrackDialog(context, ref, tr),
                   onTap: () {
                     if (tr.type == TrackType.audio) {
@@ -161,6 +169,7 @@ class TrackHeaderColumn extends ConsumerWidget {
     required bool isMuted, required Color badgeColor, Color? customColor, required VoidCallback onToggleVis, VoidCallback? onToggleMute,
     VoidCallback? onAddMedia, VoidCallback? onAddBg, VoidCallback? onAutoArrange, VoidCallback? onTimestamp, VoidCallback? onDelete,
     VoidCallback? onTap, VoidCallback? onRename, void Function(TapUpDetails)? onSecondaryTapUp,
+    bool hasWordCues = false, bool showWordCues = false, VoidCallback? onToggleWordCues,
   }) {
     return Consumer(
       builder: (context, ref, _) {
@@ -198,6 +207,16 @@ class TrackHeaderColumn extends ConsumerWidget {
                 ),
               ),
               IconButton(icon: Icon(isVisible ? Icons.visibility : Icons.visibility_off, size: 13, color: isVisible ? theme.iconColor('trackVisibility', theme.textColor) : AppColors.textMuted), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onToggleVis),
+              if (height <= 40 && onToggleWordCues != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: showWordCues ? 'Hide Spoken Words' : 'Show Spoken Words',
+                  icon: Icon(showWordCues ? Icons.subtitles : Icons.subtitles_outlined, size: 13, color: showWordCues ? AppColors.waveform : AppColors.textMuted),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: onToggleWordCues,
+                ),
+              ],
               if (height <= 40 && onTimestamp != null) ...[
                 const SizedBox(width: 4),
                 IconButton(
@@ -246,6 +265,16 @@ class TrackHeaderColumn extends ConsumerWidget {
                 if (onAutoArrange != null) ...[
                   const SizedBox(width: 6),
                   IconButton(tooltip: 'Auto-Rearrange from Left (Pack)', icon: Icon(Icons.format_align_left, size: 13, color: theme.iconColor('packLeft', Colors.cyanAccent)), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: onAutoArrange),
+                ],
+                if (hasWordCues && onToggleWordCues != null) ...[
+                  const SizedBox(width: 6),
+                  IconButton(
+                    tooltip: showWordCues ? 'Hide Spoken Words Above Audio' : 'Show Spoken Words Above Audio',
+                    icon: Icon(showWordCues ? Icons.subtitles : Icons.subtitles_outlined, size: 13, color: showWordCues ? AppColors.waveform : AppColors.textMuted),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: onToggleWordCues,
+                  ),
                 ],
               ],
             ),

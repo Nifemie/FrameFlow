@@ -42,6 +42,8 @@ class ProjectStorageService {
         'volume': c.volume,
         'orderIndex': c.orderIndex,
         'isMarked': c.isMarked,
+        'transcriptScript': c.transcriptScript,
+        'wordCues': c.wordCues.map((w) => w.toJson()).toList(),
       }).toList(),
       'images': project.images.map((img) => {
         'id': img.id, 'filePath': img.filePath, 'displayName': img.displayName,
@@ -137,6 +139,10 @@ class ProjectStorageService {
         volume: (cm['volume'] as num?)?.toDouble() ?? 1.0,
         orderIndex: cm['orderIndex'] as int,
         isMarked: cm['isMarked'] as bool? ?? false,
+        transcriptScript: cm['transcriptScript'] as String?,
+        wordCues: (cm['wordCues'] as List<dynamic>? ?? const [])
+            .map((w) => AudioWordCue.fromJson(w as Map<String, dynamic>))
+            .toList(),
       );
     }).toList();
 

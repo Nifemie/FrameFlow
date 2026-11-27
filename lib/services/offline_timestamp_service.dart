@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/utils/time_parser.dart';
+import '../models/audio_clip_item.dart';
 import 'audio_probe_service.dart';
 import 'ffmpeg_service.dart';
 
@@ -73,6 +74,14 @@ class LastGeneratedTimestamps {
 
 final lastGeneratedTimestampsProvider = StateProvider<LastGeneratedTimestamps?>((ref) => null);
 
+/// Global toggle for showing spoken-word cues above audio clips on the timeline.
+final showAudioWordCuesProvider = StateProvider<bool>((ref) => true);
+
+/// Caches the most recent aligned script & word cues per audio file path (lowercase),
+/// so users who already generated timestamps don't need to re-paste the script.
+final audioTranscriptCacheProvider = StateProvider<
+    Map<String, ({String scriptText, List<AudioWordCue> wordCues})>>((ref) => const {});
+
 class OfflineTimestampService {
   static Future<String?> findWhisperCli() async {
     for (final p in [
@@ -138,6 +147,28 @@ class OfflineTimestampService {
     bool highAccuracy = false,
     void Function(String status)? onStatus,
   }) async {
+    final res = await generateTimestampsAndWords(
+      audioPath: audioPath,
+      scriptText: scriptText,
+      granularity: granularity,
+      highAccuracy: highAccuracy,
+      onStatus: onStatus,
+    );
+    return res.rows;
+  }
+
+  /// Generates both the requested [granularity] timestamp rows and word-level
+  /// [AudioWordCue]s using the proven Fast DTW engine (`tiny.en` + `-dtw tiny.en`),
+  /// upgrading High Accuracy with beam-search decoding (`-bs 5 -bo 5`) and finer
+  /// acoustic silence-boundary detection.
+  static Future<({List<GeneratedTimestampRow> rows, List<AudioWordCue> wordCues})>
+      generateTimestampsAndWords({
+    required String audioPath,
+    required String scriptText,
+    required TimestampGranularity granularity,
+    bool highAccuracy = false,
+    void Function(String status)? onStatus,
+  }) async {
     final ffmpeg = await FFmpegService.findFFmpeg();
     if (ffmpeg == null) throw Exception('FFmpeg executable not found.');
 
@@ -146,7 +177,9 @@ class OfflineTimestampService {
       throw Exception('Offline speech engine (whisper-cli.exe) not found in assets/bin/.');
     }
 
-    final modelPath = await findWhisperModel(highAccuracy: highAccuracy);
+    // Use the proven tiny.en + DTW mechanics for both Fast and High Accuracy
+    // so audio slices always align reliably.
+    final modelPath = await findWhisperModel(highAccuracy: false);
     if (modelPath == null) {
       throw Exception('Offline speech model (ggml-tiny.en.bin) not found in assets/bin/.');
     }
@@ -173,7 +206,9 @@ class OfflineTimestampService {
 
       final audioDurationMs = await AudioProbeService.getAudioDurationMs(audioPath);
 
-      onStatus?.call('Aligning script with audio offline (DTW)...');
+      onStatus?.call(highAccuracy
+          ? 'Aligning script with audio (High Accuracy DTW)...'
+          : 'Aligning script with audio offline (DTW)...');
       final outBase = '${tempDir.path}\\aligned';
       final promptSnippet = scriptText.trim().replaceAll(RegExp(r'<[^>]+>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
       final prompt = promptSnippet.length > 220 ? promptSnippet.substring(0, 220) : promptSnippet;
@@ -185,7 +220,6 @@ class OfflineTimestampService {
               : (modelName.contains('base') ? 'base' : 'tiny'));
 
       final threads = Platform.numberOfProcessors.clamp(2, 8);
-      final useDtw = !highAccuracy;
       final whisperFuture = Process.run(whisperCli, [
         '-m', modelPath,
         '-f', wavPath,
@@ -194,10 +228,16 @@ class OfflineTimestampService {
         '-of', outBase,
         '-ml', '1',
         '-sow',
-        if (useDtw) ...['-dtw', dtwModel],
+        '-dtw', dtwModel,
+        if (highAccuracy) ...['-bs', '5', '-bo', '5'],
         if (prompt.isNotEmpty) ...['--prompt', prompt],
       ]);
-      final silenceFuture = _detectSilences(ffmpeg, wavPath);
+      final silenceFuture = _detectSilences(
+        ffmpeg,
+        wavPath,
+        noiseDb: highAccuracy ? -35 : -32,
+        minSilenceSec: highAccuracy ? 0.10 : 0.16,
+      );
 
       final wRes = await whisperFuture;
       final silences = await silenceFuture;
@@ -209,14 +249,35 @@ class OfflineTimestampService {
 
       final decoded = jsonDecode(await jsonFile.readAsString()) as Map<String, dynamic>;
       final recognized = parseWhisperJsonTokens(decoded);
+      final totalMs = audioDurationMs > 0 ? audioDurationMs : 10000;
 
-      final aligned = alignScriptToTokens(
-        scriptText: scriptText,
-        recognizedTokens: recognized,
-        granularity: granularity,
-        totalAudioMs: audioDurationMs > 0 ? audioDurationMs : 10000,
+      final alignedRows = snapToSpeechBoundaries(
+        alignScriptToTokens(
+          scriptText: scriptText,
+          recognizedTokens: recognized,
+          granularity: granularity,
+          totalAudioMs: totalMs,
+        ),
+        silences,
       );
-      return snapToSpeechBoundaries(aligned, silences);
+
+      final wordRows = granularity == TimestampGranularity.word
+          ? alignedRows
+          : snapToSpeechBoundaries(
+              alignScriptToTokens(
+                scriptText: scriptText,
+                recognizedTokens: recognized,
+                granularity: TimestampGranularity.word,
+                totalAudioMs: totalMs,
+              ),
+              silences,
+            );
+
+      final wordCues = wordRows
+          .map((r) => AudioWordCue(text: r.text, startMs: r.startMs, endMs: r.endMs))
+          .toList();
+
+      return (rows: alignedRows, wordCues: wordCues);
     } finally {
       try {
         tempDir.deleteSync(recursive: true);
@@ -445,11 +506,16 @@ class OfflineTimestampService {
     return rawParts.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
   }
 
-  static Future<List<({int startMs, int endMs})>> _detectSilences(String ffmpeg, String wavPath) async {
+  static Future<List<({int startMs, int endMs})>> _detectSilences(
+    String ffmpeg,
+    String wavPath, {
+    int noiseDb = -32,
+    double minSilenceSec = 0.16,
+  }) async {
     try {
       final res = await Process.run(ffmpeg, [
         '-i', wavPath,
-        '-af', 'silencedetect=noise=-32dB:d=0.16',
+        '-af', 'silencedetect=noise=${noiseDb}dB:d=${minSilenceSec.toStringAsFixed(2)}',
         '-f', 'null',
         '-',
       ]);

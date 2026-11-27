@@ -9,6 +9,7 @@ import '../../../models/audio_clip_item.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
 import '../../../services/audio_probe_service.dart';
+import '../../../services/offline_timestamp_service.dart';
 import '../../../services/timeline_arrangement_service.dart';
 import 'asset_context_menus.dart';
 import 'audio_volume_dialog.dart';
@@ -87,17 +88,29 @@ class AudioWaveformStrip extends ConsumerWidget {
     }
     final lastEnd = clips.map((c) => c.endTimelineMs).reduce((a, b) => a > b ? a : b);
     final playheadMs = ref.watch(playheadPositionProvider);
+    final showCuesBar = ref.watch(showAudioWordCuesProvider) && clips.any((c) => c.wordCues.isNotEmpty);
+    final stripHeight = showCuesBar ? 60.0 : 38.0;
+    final topOffset = showCuesBar ? 22.0 : 0.0;
 
     return SizedBox(
       width: contentWidth,
-      height: 38,
+      height: stripHeight,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          if (showCuesBar)
+            ...clips
+                .where((c) => c.wordCues.isNotEmpty)
+                .map((clip) => _AudioWordCuesBar(
+                      key: ValueKey('cues_${clip.id}'),
+                      clip: clip,
+                      pxPerSec: pxPerSec,
+                    )),
           ...clips.map((clip) => _AudioClipCard(
                 key: ValueKey(clip.id),
                 clip: clip,
                 pxPerSec: pxPerSec,
+                topOffset: topOffset,
                 snapPointsMs: <int>{
                   0,
                   playheadMs,
@@ -108,7 +121,7 @@ class AudioWaveformStrip extends ConsumerWidget {
                 }.toList(),
               )),
           Positioned(
-            left: (lastEnd / 1000) * pxPerSec + 4, top: 7,
+            left: (lastEnd / 1000) * pxPerSec + 4, top: topOffset + 7,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -135,7 +148,7 @@ class AudioWaveformStrip extends ConsumerWidget {
               if (playheadMs <= lastEnd + 200) return const SizedBox.shrink();
               return Positioned(
                 left: (playheadMs / 1000) * pxPerSec + 2,
-                top: 7,
+                top: topOffset + 7,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     backgroundColor: AppColors.surfaceLight.withValues(alpha: 0.8),
@@ -212,12 +225,14 @@ class _WaveformPainter extends CustomPainter {
 class _AudioClipCard extends ConsumerStatefulWidget {
   final AudioClipItem clip;
   final double pxPerSec;
+  final double topOffset;
   final List<int> snapPointsMs;
 
   const _AudioClipCard({
     super.key,
     required this.clip,
     required this.pxPerSec,
+    this.topOffset = 0,
     required this.snapPointsMs,
   });
 
@@ -274,7 +289,7 @@ class _AudioClipCardState extends ConsumerState<_AudioClipCard> {
 
     return Positioned(
       left: left,
-      top: 0,
+      top: widget.topOffset,
       bottom: 0,
       width: width,
       child: MouseRegion(
@@ -681,6 +696,96 @@ class _AudioSideSplitButton extends ConsumerWidget {
         ),
         child: const Center(
           child: Icon(Icons.content_cut, size: 10, color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
+
+/// Renders spoken-word cues in a compact 20px strip directly above an audio clip,
+/// matching each word to its exact spoken timestamp and gracefully thinning out
+/// overlapping labels when zoomed out.
+class _AudioWordCuesBar extends StatelessWidget {
+  final AudioClipItem clip;
+  final double pxPerSec;
+
+  const _AudioWordCuesBar({
+    super.key,
+    required this.clip,
+    required this.pxPerSec,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final clipLeft = (clip.startTimelineMs / 1000.0) * pxPerSec;
+    final clipWidth = max(50.0, (clip.durationMs / 1000.0) * pxPerSec);
+    final srcStart = clip.fileStartOffsetMs;
+    final srcEnd = srcStart + clip.durationMs;
+
+    final visibleCues = <({AudioWordCue cue, double x, double maxW})>[];
+    double nextFreeX = 0.0;
+
+    for (final cue in clip.wordCues) {
+      if (cue.endMs <= srcStart || cue.startMs >= srcEnd) continue;
+      final relStartMs = max(0, cue.startMs - srcStart);
+      final x = (relStartMs / 1000.0) * pxPerSec;
+      if (x >= clipWidth - 6) break;
+
+      final estTextWidth = (cue.text.length * 5.6) + 8.0;
+      if (x >= nextFreeX) {
+        final availW = max(14.0, clipWidth - x);
+        visibleCues.add((cue: cue, x: x, maxW: availW));
+        nextFreeX = x + estTextWidth + 4.0;
+      }
+    }
+
+    return Positioned(
+      left: clipLeft,
+      top: 0,
+      height: 20,
+      width: clipWidth,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: AppColors.waveform.withValues(alpha: 0.35), width: 0.6),
+        ),
+        clipBehavior: Clip.hardEdge,
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            for (final item in visibleCues)
+              Positioned(
+                left: item.x,
+                top: 1,
+                bottom: 1,
+                child: Tooltip(
+                  message: '${item.cue.text} (${TimeParser.formatStandard(clip.startTimelineMs + max(0, item.cue.startMs - srcStart))})',
+                  waitDuration: const Duration(milliseconds: 350),
+                  child: Container(
+                    constraints: BoxConstraints(maxWidth: item.maxW),
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: AppColors.waveform.withValues(alpha: 0.7), width: 1.2),
+                      ),
+                    ),
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      item.cue.text,
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      style: const TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

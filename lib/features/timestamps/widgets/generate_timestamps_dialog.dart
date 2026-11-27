@@ -148,7 +148,7 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
     });
 
     try {
-      final rows = await OfflineTimestampService.generateTimestamps(
+      final result = await OfflineTimestampService.generateTimestampsAndWords(
         audioPath: audioPath,
         scriptText: script,
         granularity: _granularity,
@@ -158,16 +158,26 @@ class _GenerateTimestampsDialogState extends ConsumerState<GenerateTimestampsDia
         },
       );
       if (mounted) {
+        final cache = Map<String, ({String scriptText, List<AudioWordCue> wordCues})>.from(
+          ref.read(audioTranscriptCacheProvider),
+        );
+        cache[audioPath.toLowerCase()] = (scriptText: script, wordCues: result.wordCues);
+        ref.read(audioTranscriptCacheProvider.notifier).state = cache;
+        ref.read(projectProvider.notifier).attachWordCuesForAudioPath(
+              audioPath,
+              scriptText: script,
+              wordCues: result.wordCues,
+            );
         ref.read(lastGeneratedTimestampsProvider.notifier).state = LastGeneratedTimestamps(
           audioPath: audioPath,
           scriptText: script,
           granularity: _granularity,
           formatMode: _formatMode,
-          rows: rows,
+          rows: result.rows,
         );
         setState(() {
           _isGenerating = false;
-          _rows = rows;
+          _rows = result.rows;
           _activeAudioPath = audioPath;
         });
       }

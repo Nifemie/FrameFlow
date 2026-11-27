@@ -752,6 +752,37 @@ class ProjectNotifier extends StateNotifier<Project> {
           : null,
     );
   }
+
+  /// Stores word-level spoken cues on a specific audio clip.
+  void setAudioClipWordCues(
+    String clipId, {
+    required String scriptText,
+    required List<AudioWordCue> wordCues,
+  }) {
+    _undoRedo.recordSnapshot(state);
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    final updated = clips
+        .map((c) => c.id == clipId ? c.copyWith(transcriptScript: scriptText, wordCues: wordCues) : c)
+        .toList();
+    state = state.copyWith(audioClips: updated);
+  }
+
+  /// Attaches word-level spoken cues to all timeline audio clips matching [filePath].
+  void attachWordCuesForAudioPath(
+    String filePath, {
+    required String scriptText,
+    required List<AudioWordCue> wordCues,
+  }) {
+    final targetNorm = filePath.toLowerCase();
+    final clips = state.audioClips.isNotEmpty ? state.audioClips : state.effectiveAudioClips;
+    if (!clips.any((c) => c.filePath.toLowerCase() == targetNorm)) return;
+    final updated = clips
+        .map((c) => c.filePath.toLowerCase() == targetNorm
+            ? c.copyWith(transcriptScript: scriptText, wordCues: wordCues)
+            : c)
+        .toList();
+    state = state.copyWith(audioClips: updated);
+  }
   void removeVoiceOver() { _undoRedo.recordSnapshot(state); state = state.copyWith(clearVoiceOver: true, images: TimingEngine.calculateSequence(images: state.images, voiceOverDurationMs: null, snapFinalImageToAudio: false)); }
   void toggleTimingMode() { _undoRedo.recordSnapshot(state); state = state.copyWith(timingMode: state.timingMode == TimingMode.automatic ? TimingMode.manual : TimingMode.automatic); }
 

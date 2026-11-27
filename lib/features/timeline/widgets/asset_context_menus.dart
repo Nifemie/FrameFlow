@@ -10,6 +10,7 @@ import '../../../models/timeline_track_item.dart';
 import '../../../providers/export_range_provider.dart';
 import '../../../providers/project_provider.dart';
 import '../../../providers/selection_provider.dart';
+import '../../../services/offline_timestamp_service.dart';
 import '../../../services/playback_controller.dart';
 import '../../../services/video_playback_engine.dart';
 import '../../properties/widgets/audio_range_dialog.dart';
@@ -17,6 +18,7 @@ import '../../properties/widgets/video_range_dialog.dart';
 import '../../shell/widgets/advanced_color_picker_dialog.dart';
 import '../../timestamps/widgets/bulk_timestamp_dialog.dart';
 import 'animation_randomisation_dialog.dart';
+import 'audio_script_cues_dialog.dart';
 import 'audio_volume_dialog.dart';
 
 /// Unified right-click context menu builder for all asset types (Images, Videos, Text, Audio).
@@ -197,6 +199,9 @@ class AssetContextMenus {
     SelectionHelper.selectAudioClip(ref, clip.id);
     final notifier = ref.read(projectProvider.notifier);
     final playhead = ref.read(playheadPositionProvider);
+    final cachedEntry = ref.read(audioTranscriptCacheProvider)[clip.filePath.toLowerCase()];
+    final hasWordCues = clip.wordCues.isNotEmpty || (cachedEntry?.wordCues.isNotEmpty ?? false);
+    final showWordCues = ref.read(showAudioWordCuesProvider);
 
     final selected = await showMenu<String>(
       context: context,
@@ -206,6 +211,23 @@ class AssetContextMenus {
         const PopupMenuItem(
           value: 'properties',
           child: Row(children: [Icon(Icons.tune, size: 15, color: AppColors.waveform), SizedBox(width: 8), Text('Show Audio Properties', style: TextStyle(fontSize: 12, color: Colors.white))]),
+        ),
+        if (hasWordCues)
+          PopupMenuItem(
+            value: 'toggle_word_cues',
+            child: Row(children: [
+              Icon(showWordCues ? Icons.subtitles_off_outlined : Icons.subtitles_outlined, size: 15, color: AppColors.waveform),
+              const SizedBox(width: 8),
+              Text(showWordCues ? 'Hide Spoken Words Above Audio' : 'Show Spoken Words Above Audio', style: const TextStyle(fontSize: 12, color: Colors.white)),
+            ]),
+          ),
+        PopupMenuItem(
+          value: 'paste_script_cues',
+          child: Row(children: [
+            Icon(hasWordCues ? Icons.edit_note : Icons.subtitles_outlined, size: 15, color: AppColors.waveform),
+            const SizedBox(width: 8),
+            Text(hasWordCues ? 'Edit Script for Spoken Words...' : 'Paste Script (Show Spoken Words)...', style: const TextStyle(fontSize: 12, color: Colors.white)),
+          ]),
         ),
         const PopupMenuItem(
           value: 'audio_range',
@@ -237,6 +259,21 @@ class AssetContextMenus {
 
     if (!context.mounted || selected == null) return;
     switch (selected) {
+      case 'toggle_word_cues':
+        if (clip.wordCues.isEmpty && cachedEntry != null && cachedEntry.wordCues.isNotEmpty) {
+          notifier.attachWordCuesForAudioPath(
+            clip.filePath,
+            scriptText: cachedEntry.scriptText,
+            wordCues: cachedEntry.wordCues,
+          );
+          ref.read(showAudioWordCuesProvider.notifier).state = true;
+        } else {
+          ref.read(showAudioWordCuesProvider.notifier).state = !showWordCues;
+        }
+        break;
+      case 'paste_script_cues':
+        showDialog(context: context, builder: (_) => AudioScriptCuesDialog(clip: clip));
+        break;
       case 'audio_range':
         showDialog(context: context, builder: (_) => AudioRangeDialog(clip: clip));
         break;
